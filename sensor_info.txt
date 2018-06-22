@@ -1,0 +1,5 @@
+06/18 23:00 
+    33: picnic table w/ lux
+    59:  cnic table w/ lux and temp
+    60: near tree w/ lux and temp
+    61: under tree w/ lux and temp 

@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/rogerhh/research/code/parse_initial_data.cpp
+iostream
+-
+cmath
+-
+iomanip
+-
+fstream
+-
+string
+-
+

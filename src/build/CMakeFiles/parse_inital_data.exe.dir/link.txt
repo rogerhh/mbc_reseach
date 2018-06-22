@@ -1,0 +1,1 @@
+/usr/bin/c++   --std=c++11  -rdynamic CMakeFiles/parse_inital_data.exe.dir/parse_initial_data.cpp.o  -o parse_inital_data.exe 

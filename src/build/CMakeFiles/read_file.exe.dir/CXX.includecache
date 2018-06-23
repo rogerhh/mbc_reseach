@@ -1,4 +1,4 @@
-#IncludeRegexLine: ^[ 	]*[#%][ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
 
 #IncludeRegexScan: ^.*$
 
@@ -6,9 +6,9 @@
 
 #IncludeRegexTransform: 
 
-/home/rogerhh/research/code/DataPoint.cpp
+/home/rogerhh/mbc_reseach/src/DataPoint.cpp
 DataPoint.hpp
-/home/rogerhh/research/code/DataPoint.hpp
+/home/rogerhh/mbc_reseach/src/DataPoint.hpp
 stdexcept
 -
 string
@@ -16,7 +16,7 @@ string
 sstream
 -
 
-/home/rogerhh/research/code/DataPoint.hpp
+/home/rogerhh/mbc_reseach/src/DataPoint.hpp
 iostream
 -
 cstdint
@@ -26,9 +26,9 @@ vector
 ctime
 -
 
-/home/rogerhh/research/code/MBCFunctions.cpp
+/home/rogerhh/mbc_reseach/src/MBCFunctions.cpp
 MBCFunctions.hpp
-/home/rogerhh/research/code/MBCFunctions.hpp
+/home/rogerhh/mbc_reseach/src/MBCFunctions.hpp
 iostream
 -
 fstream
@@ -44,7 +44,7 @@ cmath
 iomanip
 -
 
-/home/rogerhh/research/code/MBCFunctions.hpp
+/home/rogerhh/mbc_reseach/src/MBCFunctions.hpp
 string
 -
 map
@@ -52,9 +52,9 @@ map
 ctime
 -
 DataPoint.hpp
-/home/rogerhh/research/code/DataPoint.hpp
+/home/rogerhh/mbc_reseach/src/DataPoint.hpp
 
-/home/rogerhh/research/code/read_file.cpp
+/home/rogerhh/mbc_reseach/src/read_file.cpp
 iostream
 -
 fstream
@@ -62,5 +62,5 @@ fstream
 stdexcept
 -
 MBCFunctions.hpp
-/home/rogerhh/research/code/MBCFunctions.hpp
+/home/rogerhh/mbc_reseach/src/MBCFunctions.hpp
 

@@ -163,13 +163,15 @@ void write_to_database(const std::string dest_file)
 
     for(auto i = datapoints.begin(); i != datapoints.end(); i++)
     {
-        fout << "Data logger " << i->first << "\n";
+        fout << "data_logger " << i->first << "\n";
         for(auto j = i->second.begin(); j != i->second.end(); j++)
         {
             fout << *(j->second) << "\n";
             fout.flush();
         }
+        fout << "end_logger" << "\n";
     }
+    fout << "end_database" << "\n";
 
     fout.close();
     return;
@@ -203,7 +205,9 @@ void read_from_database(const std::string& source_file)
     // read file according to version
     if(version_num == 1.0)
     {
+        // ignore date
         fin.getline(ignorable, 60);
+        fin.getline(ignorable, 10, ' ');
     }
 
     return;

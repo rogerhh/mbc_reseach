@@ -14,7 +14,7 @@ namespace MBC
 static const double VERSION = 1.0;
 
 // file path to database
-static const std::string DATABASE_FILE = "/home/rogerhh/research/data/database_file.csv"; 
+static const std::string DATABASE_FILE = "/home/rogerhh/mbc_research/data/database_file.csv"; 
 
 // data structure containing all the data points
 // access a DataPoint pointer with datapoints[SN][time_t]

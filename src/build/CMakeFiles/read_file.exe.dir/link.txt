@@ -1,1 +1,1 @@
-/usr/bin/c++   --std=c++11  -rdynamic CMakeFiles/read_file.exe.dir/read_file.cpp.o CMakeFiles/read_file.exe.dir/DataPoint.cpp.o CMakeFiles/read_file.exe.dir/MBCFunctions.cpp.o  -o read_file.exe 
+/usr/bin/c++    --std=c++11   CMakeFiles/read_file.exe.dir/read_file.cpp.o CMakeFiles/read_file.exe.dir/DataPoint.cpp.o CMakeFiles/read_file.exe.dir/MBCFunctions.cpp.o  -o read_file.exe -rdynamic 

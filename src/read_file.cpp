@@ -9,7 +9,7 @@ using namespace std;
 
 int main(int argc, char** argv)
 {
-    if((argc - 1) % 5 != 0)
+    if(argc == 1 || (argc - 1) % 5 != 0)
     {
         cout << "Usage: [file_path] [start_time] [end_time] [longtitude] [latitude]" << endl;
         return 0;

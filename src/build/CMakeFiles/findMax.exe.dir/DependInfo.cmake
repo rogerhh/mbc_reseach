@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/rogerhh/research/code/findMax.cpp" "/home/rogerhh/research/code/build/CMakeFiles/findMax.exe.dir/findMax.cpp.o"
+  "/home/rogerhh/mbc_reseach/src/findMax.cpp" "/home/rogerhh/mbc_reseach/src/build/CMakeFiles/findMax.exe.dir/findMax.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 

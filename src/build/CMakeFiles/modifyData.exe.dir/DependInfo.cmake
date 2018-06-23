@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/rogerhh/research/code/modifyData.cpp" "/home/rogerhh/research/code/build/CMakeFiles/modifyData.exe.dir/modifyData.cpp.o"
+  "/home/rogerhh/mbc_reseach/src/modifyData.cpp" "/home/rogerhh/mbc_reseach/src/build/CMakeFiles/modifyData.exe.dir/modifyData.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 

@@ -4,7 +4,7 @@ set(CMAKE_DEPENDS_LANGUAGES
   )
 # The set of files for implicit dependencies of each language:
 set(CMAKE_DEPENDS_CHECK_CXX
-  "/home/rogerhh/research/code/sameLuxLevel.cpp" "/home/rogerhh/research/code/build/CMakeFiles/sameLuxLevel.exe.dir/sameLuxLevel.cpp.o"
+  "/home/rogerhh/mbc_reseach/src/sameLuxLevel.cpp" "/home/rogerhh/mbc_reseach/src/build/CMakeFiles/sameLuxLevel.exe.dir/sameLuxLevel.cpp.o"
   )
 set(CMAKE_CXX_COMPILER_ID "GNU")
 

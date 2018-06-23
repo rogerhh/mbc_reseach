@@ -1,1 +1,1 @@
-/usr/bin/c++   --std=c++11  -rdynamic CMakeFiles/sameLuxLevel.exe.dir/sameLuxLevel.cpp.o  -o sameLuxLevel.exe 
+/usr/bin/c++    --std=c++11   CMakeFiles/sameLuxLevel.exe.dir/sameLuxLevel.cpp.o  -o sameLuxLevel.exe -rdynamic 

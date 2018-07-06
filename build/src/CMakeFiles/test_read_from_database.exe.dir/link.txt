@@ -1,0 +1,1 @@
+/usr/bin/c++    --std=c++11   CMakeFiles/test_read_from_database.exe.dir/test_read_from_database.cpp.o CMakeFiles/test_read_from_database.exe.dir/DataPoint.cpp.o CMakeFiles/test_read_from_database.exe.dir/MBCFunctions.cpp.o  -o test_read_from_database.exe -rdynamic 

@@ -1,0 +1,22 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/rogerhh/mbc_research/learning/curl_tutorial/curl_test.cpp
+cstdlib
+-
+stdlib.h
+-
+string
+-
+cstring
+-
+iostream
+-
+curl/curl.h
+-
+

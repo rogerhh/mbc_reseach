@@ -1,0 +1,1 @@
+/usr/bin/c++      CMakeFiles/tutorial.exe.dir/tutorial.cpp.o  -o tutorial.exe -rdynamic TestLibrary2/libtestlib2.a 

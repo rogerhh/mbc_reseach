@@ -50,15 +50,15 @@ double& DataPoint::operator[](int index)
 
 std::ostream& operator<<(std::ostream& os, DataPoint& datapoint)
 {
-    os << datapoint.time;
+    os << datapoint.time << ",";
     for(int i = 0; i < DataPoint::SIZE_OF_DATA_FIELDS; i++)
     {
         double data_val = datapoint[i];
-        os << ",";
         if(data_val != -1000)
         {
             os << data_val;
         }
+        os << ",";
     }
 }
 

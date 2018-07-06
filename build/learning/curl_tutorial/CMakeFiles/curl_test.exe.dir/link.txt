@@ -1,0 +1,1 @@
+/usr/bin/c++    --std=c++11   CMakeFiles/curl_test.exe.dir/curl_test.cpp.o  -o curl_test.exe -rdynamic -lcurl 

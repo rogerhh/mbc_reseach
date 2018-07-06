@@ -1,0 +1,20 @@
+#IncludeRegexLine: ^[ 	]*#[ 	]*(include|import)[ 	]*[<"]([^">]+)([">])
+
+#IncludeRegexScan: ^.*$
+
+#IncludeRegexComplain: ^$
+
+#IncludeRegexTransform: 
+
+/home/rogerhh/mbc_research/src/sameLuxLevel.cpp
+iostream
+-
+cmath
+-
+fstream
+-
+vector
+-
+iomanip
+-
+

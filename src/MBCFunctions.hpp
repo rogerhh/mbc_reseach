@@ -11,7 +11,7 @@ namespace MBC
 {
 
 // version number of system
-static const double VERSION = 1.0;
+static const double VERSION = 1.1;
 
 // file path to database
 static const std::string DATABASE_FILE = "/home/rogerhh/mbc_research/data/database_file.csv"; 
@@ -29,6 +29,9 @@ void add_file(const std::string& path,
               const double longtitude,
               const double latitude);
 
+// delete all data of specified file in the database
+void del_file(const std::string& path);
+
 // write datapoints to  the database
 void write_to_database(const std::string dest_file = DATABASE_FILE);
 
@@ -36,6 +39,8 @@ void write_to_database(const std::string dest_file = DATABASE_FILE);
 void read_from_database(const std::string& source_file = DATABASE_FILE);
 
 std::time_t read_time_format(const std::string& time_string, const double GMT_time);
+
+void clean_database();
 
 // this function should be called before program exits to clean up the heap
 void delete_datapoints();

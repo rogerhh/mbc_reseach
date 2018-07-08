@@ -18,14 +18,14 @@ static const std::string DATABASE_FILE = "/home/rogerhh/mbc_research/data/databa
 
 // data structure containing all the data points
 // access a DataPoint pointer with datapoints[SN][time_t]
-static std::map<int, std::map<std::time_t, DataPoint*>> datapoints;
+extern std::map<int, std::map<std::time_t, DataPoint*>> datapoints;
 
 // construct datapoints from raw .csv file
 // throws runtime_error
-// start_ and end_time must be in "mm/dd/yy-hh:mm:ss" 24-hour format
+// start_ and end_time_str must be in "mm/dd/yy-hh:mm:ss" 24-hour format
 void add_file(const std::string& path, 
-              const std::string& start_time, 
-              const std::string& end_time,
+              const std::string& start_time_str, 
+              const std::string& end_time_str,
               const double longtitude,
               const double latitude);
 

@@ -58,7 +58,7 @@ int main(int argc, char** argv)
 
     if(curl)
     {
-        std::string url = "https://api.weatherbit.io/v2.0/history/hourly?city=Raleigh,NC&start_date=2018-06-29&end_date=2018-06-30&key=8fabd87c7c1a42d484e91cd8c603dd04";
+        std::string url = "https://api.weatherbit.io/v2.0/history/hourly?city=Ann_Arbor,MI&start_date=2018-06-20&end_date=2018-06-21&key=8fabd87c7c1a42d484e91cd8c603dd04";
         //std::string url = "https://api.sunrise-sunset.org/json?lat=" + std::string(argv[3]) + "&lng=" + std::string(argv[2]) + "&date=" + date; //"https://api.sunrise-sunset.org/";
         curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
         

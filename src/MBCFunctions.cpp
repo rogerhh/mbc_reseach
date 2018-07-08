@@ -14,6 +14,8 @@
 namespace MBC
 {
 
+std::map<int, std::map<std::time_t, DataPoint*>> datapoints;
+
 void add_file(const std::string& path, 
               const std::string& start_time_str, 
               const std::string& end_time_str,
@@ -381,6 +383,8 @@ void read_from_database(const std::string& source_file)
     fin.getline(version_str, 20);
     version_num = std::atof(version_str);
 
+    long data_num = 0;
+
     // read file according to version
     // need to archive old code
     if(version_num == 1.1)
@@ -424,6 +428,9 @@ void read_from_database(const std::string& source_file)
                     int counter = -1;
                     std::time_t seconds_after_epoch = 0;
                     DataPoint* datapoint_ptr = nullptr;
+
+                    data_num++;
+
                     while(endpos != std::string::npos)
                     {
                         if(counter == -1)
@@ -436,6 +443,7 @@ void read_from_database(const std::string& source_file)
                             if(seconds_after_epoch == 0) { throw std::runtime_error("what"); }
                             datapoint_ptr = new DataPoint(serial_num, seconds_after_epoch);
                             datapoints[serial_num][seconds_after_epoch] = datapoint_ptr;
+                            //std::cout << serial_num << " " << seconds_after_epoch << "\n";
                         }
                         else
                         {
@@ -466,7 +474,8 @@ void read_from_database(const std::string& source_file)
         throw std::runtime_error(msg);
     }
 
-    std::cout << "Successfully read from database.\n";
+    std::cout << "Successfully read from database. Read " << data_num << " datapoints\n";
+    std::cout << datapoints.size() << " " << datapoints[20369359].size() << "\n";
     return;
 }
 

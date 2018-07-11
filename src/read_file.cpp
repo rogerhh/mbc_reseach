@@ -9,6 +9,50 @@ using namespace std;
 
 int main(int argc, char** argv)
 {
+    if(argc != 1)
+    {
+        cout << "Usage: [path to new files list]\n";
+        return 0;
+    }
+
+    // read from database
+    try
+    {
+        read_from_database();
+    }
+    catch(runtime_error& e)
+    {
+        cout << "runtime_error when reading from database.\n" << e.what() << "\n";
+    }
+
+    char line_cstr[256];
+
+    while(fin.getline(line, 256))
+    {
+        string line = string(line_cstr);
+        string path, longitude, latitude, start_time, end_time;
+        int pos = 0, lastpos;
+        pos = line.find(";");
+        path = line.substr(0, pos);
+        lastpos = pos + 1;
+        pos = line.find(";", lastpos);
+        longitude = line.substr(lastpos, pos - lastpos);
+        lastpos = pos + 1;
+        pos = line.find(";", lastpos);
+        latitude = line.substr(lastpos, pos - lastpos);
+        lastpos = pos + 1;
+        if(lastpos != line.length())
+        {
+            pos = line.find(";", lastpos);
+            start_time = line.substr(lastpos, pos - lastpos);
+            lastpos = pos + 1;
+            pos = line.find(";", lastpos);
+            end_time = line.substr(lastpos, pos - lastpos);
+        }
+        // fix input format
+    }
+
+
     if((argc - 1) % 5 != 0)
     {
         cout << "Usage: [file_path] [start_time] [end_time] [longtitude] [latitude]" << endl;

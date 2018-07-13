@@ -1,1 +1,0 @@
-/usr/bin/c++    --std=c++11   CMakeFiles/socket_client.exe.dir/socket_client.cpp.o  -o socket_client.exe -rdynamic 

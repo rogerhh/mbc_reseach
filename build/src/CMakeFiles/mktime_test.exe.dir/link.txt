@@ -1,1 +1,0 @@
-/usr/bin/c++    --std=c++11   CMakeFiles/mktime_test.exe.dir/mktime_test.cpp.o  -o mktime_test.exe -rdynamic 

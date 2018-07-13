@@ -1,1 +1,0 @@
-/usr/bin/c++    --std=c++11   CMakeFiles/modifyData.exe.dir/modifyData.cpp.o  -o modifyData.exe -rdynamic 

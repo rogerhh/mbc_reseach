@@ -1,1 +1,0 @@
-/usr/bin/c++    --std=c++11   CMakeFiles/comparison.exe.dir/comparison.cpp.o  -o comparison.exe -rdynamic 

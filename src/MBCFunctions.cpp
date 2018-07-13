@@ -16,13 +16,13 @@ namespace MBC
 
 std::map<int, std::map<std::time_t, DataPoint*>> datapoints;
 
-void add_file(const std::string& path, 
-              const std::string& start_time_str, 
-              const std::string& end_time_str,
-              const double longtitude,
-              const double latitude)
+int add_file(const std::string& path, 
+             const double longtitude,
+             const double latitude,
+             const std::string& start_time_str, 
+             const std::string& end_time_str)
 {
-    // open .hobo file
+    // open .csv file
     std::ifstream fin;
     fin.open(path);
     if(!fin.is_open())
@@ -37,7 +37,7 @@ void add_file(const std::string& path,
     char title_cstr[256];
     fin.getline(title_cstr, 60);
     std::string title_str = std::string(title_cstr);
-    std::cout << title_str << "\n";
+    //std::cout << title_str << "\n";
     if(title_str.find("Plot Title:") == std::string::npos)
     {
         fin.close();
@@ -90,41 +90,55 @@ void add_file(const std::string& path,
     //std::cout << "read data types\n";
 
     // convert start_time_str and end_time_str to time_t objects
-    char str[60];
-    while(fin.getline(str, 60, ','))
+    int data_count = 0;
+    char cstr[256];
+    while(fin.getline(cstr, 256))
     {
+        std::string line = std::string(cstr), str;
+        int lastpos = 0;
+
         // read date
         std::tm tm;
         tm.tm_isdst = -1;
-        fin.getline(str, 5, '/');
-        tm.tm_mon = std::atoi(str) - 1;         // month index starts from 0
-        fin.getline(str, 5, '/');
-        tm.tm_mday = std::atoi(str);
-        fin.getline(str, 5, ' ');
-        tm.tm_year = std::atoi(str);
+        get_string(str, line, ",", lastpos);
+        get_string(str, line, "/", lastpos);
+        tm.tm_mon = std::stoi(str) - 1;         // month index starts from 0
+        get_string(str, line, "/", lastpos);
+        tm.tm_mday = std::stoi(str);
+        get_string(str, line, " ", lastpos);
+        tm.tm_year = std::stoi(str);
         tm.tm_year = tm.tm_year + 2000 - 1900;  // years since the Epoch
 
         // read time
         std::string sign;
-        fin.getline(str, 5, ':');
-        tm.tm_hour = std::atoi(str);
-        fin.getline(str, 5, ':');
-        tm.tm_min = std::atoi(str);
-        fin.getline(str, 5, ' ');
-        tm.tm_sec = std::atoi(str);
-        fin.getline(str, 5, ',');
-        sign = std::string(str);
+        get_string(str, line, ":", lastpos);
+        tm.tm_hour = std::stoi(str);
+        get_string(str, line, ":", lastpos);
+        tm.tm_min = std::stoi(str);
+        get_string(str, line, " ", lastpos);
+        tm.tm_sec = std::stoi(str);
+        get_string(sign, line, ",", lastpos);
         if(tm.tm_hour == 12 && sign == "AM") { tm.tm_hour = 0; }
         else if(tm.tm_hour != 12 && sign == "PM") { tm.tm_hour += 12; }
         tm.tm_hour -= GMT_time;
 
-        std::cout << tm.tm_mon << " " << tm.tm_mday << " " << tm.tm_year << " " << tm.tm_hour << " " << tm.tm_min << " " << tm.tm_sec << " " << sign << "\n";
-
-        // remember it starts counting from 0
+        //std::cout << tm.tm_mon << " " << tm.tm_mday << " " << tm.tm_year << " " << tm.tm_hour << " " << tm.tm_min << " " << tm.tm_sec << " " << sign << "\n";
 
         time_t tm_seconds_since_epoch = timegm(&tm);
-        time_t start_time = read_time_format(start_time_str, GMT_time);
-        time_t end_time = read_time_format(end_time_str, GMT_time);
+        
+        bool in_range_flag = false;
+        if(start_time_str == "NULL" && end_time_str == "NULL")
+        {
+            in_range_flag = true;
+        }
+        else
+        {
+            time_t start_time = read_time_format(start_time_str, GMT_time);
+            time_t end_time = read_time_format(end_time_str, GMT_time);
+            //std::cout << start_time << " " << tm_seconds_since_epoch << " " << end_time << "\n";
+            in_range_flag = start_time <= tm_seconds_since_epoch &&
+                            tm_seconds_since_epoch < end_time;
+        }
         
         //std::cout << std::put_time(std::gmtime(&start_time), "%c") << " " << std::flush;
         //std::cout << std::put_time(std::gmtime(&tm_seconds_since_epoch), "%c");
@@ -134,18 +148,16 @@ void add_file(const std::string& path,
         //std::cout << start_time << " " << tm_seconds_since_epoch << " " << end_time << "\n" << std::flush;
 
         // read data
-        fin.getline(str, 60, ',');
         double data_value1 = -1000, data_value2 = -1000;
-        data_value1 = std::atof(str);
+        data_value1 = std::stof(line.substr(lastpos));
         if(fields_num == 2)
         {
-            fin.getline(str, 60);
-            data_value2 = std::atof(str);
+            get_string(str, line, ",", lastpos);
+            data_value2 = std::stof(line.substr(lastpos));
         }
         //std::cout << data_value << "\n";
 
-        if(start_time <= tm_seconds_since_epoch &&
-           tm_seconds_since_epoch < end_time)
+        if(in_range_flag)
         {
             DataPoint* datapoint_ptr = new DataPoint(SN, tm_seconds_since_epoch);
             datapoints[SN][tm_seconds_since_epoch] = datapoint_ptr;
@@ -156,11 +168,12 @@ void add_file(const std::string& path,
             {
                 (*datapoint_ptr)[data_index2] = data_value2;
             }
+            data_count++;
         }
     }   
     fin.close();
-    std::cout << "Successfully added file.\n";
-    return;
+    std::cout << "Successfully added file: " << path << " with " << data_count << " data points.\n";
+    return data_count;
 }
 
 
@@ -293,7 +306,7 @@ void replace_string(std::string& str, const std::string& from, const std::string
 
 void write_to_database(const std::string dest_file)
 {
-    // save old database to dataarchive/
+/*    // save old database to dataarchive/
     std::cout << "Moving old database to archive.\n";
     std::ifstream fin;
     fin.open(DATABASE_FILE);
@@ -315,7 +328,8 @@ void write_to_database(const std::string dest_file)
     std::cout << "Error saving old database file: " << DATABASE_FILE
               << "File cannot be opened.\n";
     }
-              
+*/
+
     // open dest file
     std::ofstream fout;
     fout.open(dest_file);
@@ -541,6 +555,16 @@ void delete_datapoints()
             delete j->second;
         }
     }
+    return;
+}
+
+void get_string(std::string& str, const std::string& source, 
+                const std::string& delim, int& lastpos)
+{
+    int pos = source.find(delim, lastpos);
+    if(pos == std::string::npos) { return; }
+    str = source.substr(lastpos, pos - lastpos);
+    lastpos = pos + 1;
     return;
 }
 

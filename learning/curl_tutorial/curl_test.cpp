@@ -37,8 +37,6 @@ int main(int argc, char** argv)
     CURL *curl;
     CURLcode res;
 
-    struct memory_t data;
-
 /*    if(argc != 4)
     {
         std::cout << "Error: should have 4 arguments\n";
@@ -58,24 +56,39 @@ int main(int argc, char** argv)
 
     if(curl)
     {
-        std::string url = "https://api.weatherbit.io/v2.0/history/hourly?city=Ann_Arbor,MI&start_date=2018-06-20&end_date=2018-06-21&key=8fabd87c7c1a42d484e91cd8c603dd04";
+        std::string url;
+        double lat = 42.297;
+        for(int i = 0; i < 5; i ++)
+        {
+            double lon = -83.728;
+            for(int j = 0; j < 4; j++)
+            {
+                struct memory_t data;
+
+                url = "https://api.weatherbit.io/v2.0/history/hourly?lat=" + std::to_string(lat) + "&lon=" + std::to_string(lon) + "&start_date=2018-06-20&end_date=2018-06-21&key=8fabd87c7c1a42d484e91cd8c603dd04";
+                curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+                
+                curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+
+                curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
+
+                curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
+
+                res = curl_easy_perform(curl);
+                if(res != CURLE_OK)
+                    std::cout << "Error: " << curl_easy_strerror(res) << "\n";
+
+                std::cout << "lat=" << lat << "&lon=" << lon << "&data.contents=" << data.contents << "\n";
+
+                free(data.contents);
+
+                lon += 0.01;
+            }
+            lat += 0.01;
+        }
+        //std::string url = "https://api.weatherbit.io/v2.0/history/hourly?lat=42.2976&lon=-83.7285&start_date=2018-06-20&end_date=2018-06-21&key=8fabd87c7c1a42d484e91cd8c603dd04";
         //std::string url = "https://api.sunrise-sunset.org/json?lat=" + std::string(argv[3]) + "&lng=" + std::string(argv[2]) + "&date=" + date; //"https://api.sunrise-sunset.org/";
-        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
-        
-        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
-
-        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, write_callback);
-
-        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
-
-        res = curl_easy_perform(curl);
-        if(res != CURLE_OK)
-            std::cout << "Error: " << curl_easy_strerror(res) << "\n";
-
-        std::cout << "Successful. data.contents = " << data.contents << "\n";
     }
-
-    free(data.contents);
 
     curl_global_cleanup();
 

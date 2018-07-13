@@ -23,11 +23,12 @@ extern std::map<int, std::map<std::time_t, DataPoint*>> datapoints;
 // construct datapoints from raw .csv file
 // throws runtime_error
 // start_ and end_time_str must be in "mm/dd/yy-hh:mm:ss" 24-hour format
-void add_file(const std::string& path, 
-              const std::string& start_time_str, 
-              const std::string& end_time_str,
-              const double longtitude,
-              const double latitude);
+// returns number of data points read
+int add_file(const std::string& path, 
+             const double longtitude,
+             const double latitude,
+             const std::string& start_time_str, 
+             const std::string& end_time_str);
 
 // delete all data of specified file in the database
 void del_file(const std::string& path);
@@ -44,6 +45,10 @@ void clean_database();
 
 // this function should be called before program exits to clean up the heap
 void delete_datapoints();
+
+// modifies str to the string from lastpos to delim. Updates lastpos to the character after delim
+void get_string(std::string& str, const std::string& source, 
+                const std::string& delim, int& lastpos);
 
 } // namespace MBC
 

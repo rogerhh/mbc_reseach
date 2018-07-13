@@ -1,6 +1,8 @@
 #include <iostream>
 #include <fstream>
 #include <stdexcept>
+#include <cstring>
+#include <string.h>
 
 #include "MBCFunctions.hpp"
 
@@ -9,7 +11,7 @@ using namespace std;
 
 int main(int argc, char** argv)
 {
-    if(argc != 1)
+    if(argc != 2)
     {
         cout << "Usage: [path to new files list]\n";
         return 0;
@@ -18,42 +20,113 @@ int main(int argc, char** argv)
     // read from database
     try
     {
-        read_from_database();
+        //read_from_database();
     }
     catch(runtime_error& e)
     {
         cout << "runtime_error when reading from database.\n" << e.what() << "\n";
     }
 
-    char line_cstr[256];
-
-    while(fin.getline(line, 256))
+    string list_file = string(argv[1]);
+    ifstream fin(list_file);
+    if(!fin.is_open())
     {
-        string line = string(line_cstr);
-        string path, longitude, latitude, start_time, end_time;
-        int pos = 0, lastpos;
-        pos = line.find(";");
-        path = line.substr(0, pos);
-        lastpos = pos + 1;
-        pos = line.find(";", lastpos);
-        longitude = line.substr(lastpos, pos - lastpos);
-        lastpos = pos + 1;
-        pos = line.find(";", lastpos);
-        latitude = line.substr(lastpos, pos - lastpos);
-        lastpos = pos + 1;
-        if(lastpos != line.length())
-        {
-            pos = line.find(";", lastpos);
-            start_time = line.substr(lastpos, pos - lastpos);
-            lastpos = pos + 1;
-            pos = line.find(";", lastpos);
-            end_time = line.substr(lastpos, pos - lastpos);
-        }
-        // fix input format
+        cout << "Error opening list file: " << list_file << "\n";
+        return 0;
     }
 
+    char line_cstr[256];
+    int data_count  = 0;
 
-    if((argc - 1) % 5 != 0)
+    while(fin.getline(line_cstr, 256))
+    {
+        if(strlen(line_cstr) < 10)
+        {
+            continue;
+        }
+        string line = string(line_cstr);
+        string str, path, start_time_str, end_time_str, lat_dir, lng_dir;
+        double latitude, longitude;
+        int lastpos = 0;
+
+        // get path to file
+        get_string(path, line, ",", lastpos);
+        path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files/" + path;
+        
+        // get latitude
+        get_string(str, line, "o", lastpos);
+        latitude = stof(str);
+        get_string(str, line, "'", lastpos);
+        latitude += stof(str) / 60.0;
+        get_string(str, line, "\"", lastpos);
+        latitude += stof(str) / 3600.0;
+        lat_dir = line.substr(lastpos, 1);
+        if(lat_dir == "S")
+        {
+            latitude *= -1;
+        }
+        else if(lat_dir != "N")
+        {
+            cout << "Latitude sign unrecognizable for file: " << path << "\n";
+            continue;
+        }
+
+        // update lastpos to after next comma
+        get_string(str, line, ",", lastpos);
+
+        // get longitude
+        get_string(str, line, "o", lastpos);
+        longitude = stof(str);
+        get_string(str, line, "'", lastpos);
+        longitude += stof(str) / 60.0;
+        get_string(str, line, "\"", lastpos);
+        longitude += stof(str) / 3600.0;
+        lng_dir = line.substr(lastpos, 1);
+        if(lng_dir == "W")
+        {
+            longitude *= -1;
+        }
+        else if(lng_dir != "E")
+        {
+            cout << "Longitude sign unrecognizable for file: " << path << "\n";
+            continue;
+        }
+
+        // update lastpos to after next comma
+        get_string(str, line, ",", lastpos);
+
+
+        // check if there is time input
+        if(lastpos < line.length() - 10)
+        {
+            get_string(start_time_str, line, ",", lastpos);
+            get_string(end_time_str, line, ",", lastpos);
+        }
+        else
+        {
+            start_time_str = end_time_str = "NULL";
+        }
+
+        if(lastpos < line.length() - 10)
+        {
+            cout << "Error with lastpos for file: " << path << "\n";
+            continue;
+        }
+
+        try
+        {
+            int count = add_file(path, latitude, longitude, start_time_str, end_time_str);
+            data_count += count;
+        }
+        catch(runtime_error& e)
+        {
+            cout << "runtime_error when reading file " << list_file << "\n" << e.what() << "\n";
+        }
+    }
+
+    cout << "Successfully read files with " << data_count << " data points\n";
+
+/*    if((argc - 1) % 5 != 0)
     {
         cout << "Usage: [file_path] [start_time] [end_time] [longtitude] [latitude]" << endl;
         return 0;
@@ -86,11 +159,12 @@ int main(int argc, char** argv)
             cout << "runtime_error when reading file " << filename << "\n" << e.what() << "\n";
         }
     }
+*/
 
     // write to database
     try
     {
-        write_to_database();
+        write_to_database("/home/rogerhh/mbc_research/data/test_database.csv");
     }
     catch(runtime_error& e)
     {

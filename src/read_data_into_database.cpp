@@ -9,7 +9,7 @@
 using namespace MBC;
 using namespace std;
 
-int main(int argc, char** argv)
+int main (int argc, char** argv)
 {
     if(argc != 2)
     {
@@ -115,7 +115,7 @@ int main(int argc, char** argv)
 
         try
         {
-            int count = add_file(path, longitude, latitude, start_time_str, end_time_str);
+            int count = add_file_to_sqlite(path, longitude, latitude, start_time_str, end_time_str);
             data_count += count;
         }
         catch(runtime_error& e)
@@ -125,52 +125,6 @@ int main(int argc, char** argv)
     }
 
     cout << "Successfully read files with " << data_count << " data points\n";
-
-/*    if((argc - 1) % 5 != 0)
-    {
-        cout << "Usage: [file_path] [start_time] [end_time] [longtitude] [latitude]" << endl;
-        return 0;
-    }
-
-    // read files
-    int count = 1;
-    try
-    {
-        read_from_database();
-    }
-    catch(runtime_error& e)
-    {
-        cout << "runtime_error when reading from database.\n" << e.what() << "\n";
-    }
-    while(count < argc && (count = count + 5))
-    {
-        string filename = string(argv[1]);
-        string start_time = string(argv[2]);
-        string end_time = string(argv[3]);
-        double longtitude = stod(string(argv[4]));
-        double latitude = stod(string(argv[5]));
-        try
-        {
-            add_file(filename, start_time, end_time, longtitude, latitude);
-            cout << "Successfully read file " << filename << "\n";
-        }
-        catch(runtime_error& e)
-        {
-            cout << "runtime_error when reading file " << filename << "\n" << e.what() << "\n";
-        }
-    }
-*/
-
-    // write to database
-    try
-    {
-        write_to_database("/home/rogerhh/mbc_research/data/test_database.csv");
-    }
-    catch(runtime_error& e)
-    {
-        cout << "runtime_error when writing to database.\n" << e.what() << "\n";
-    }
-    delete_datapoints();
 
     return 0;
 }

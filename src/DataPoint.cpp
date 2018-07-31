@@ -60,7 +60,15 @@ std::ostream& operator<<(std::ostream& os, DataPoint& datapoint)
         }
         os << ",";
     }
+    return os;
 }
+
+const std::vector<std::string> FIELD_STRINGS = {"LIGHT_INTENSITY",
+                                                "TEMPERATURE",
+                                                "PRESSURE",
+                                                "LONGITUDE",
+                                                "LATITUDE",
+                                                "WEATHER"};
 
 } // namespace MBC
 

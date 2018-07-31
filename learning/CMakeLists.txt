@@ -1,1 +1,2 @@
 add_subdirectory(curl_tutorial)
+add_subdirectory(sqlite_tutorial)

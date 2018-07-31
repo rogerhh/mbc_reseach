@@ -34,9 +34,11 @@ public:
     static constexpr int LIGHT_INTENSITY = 0;
     static constexpr int TEMPERATURE     = 1;
     static constexpr int PRESSURE        = 2;
-    static constexpr int LONTITUDE       = 3;
-    static constexpr int LATITUDE        = 4;
+    static constexpr int LATITUDE        = 3;
+    static constexpr int LONGITUDE       = 4;
     static constexpr int WEATHER         = 5;
+
+    static const std::vector<std::string> FIELD_STRINGS;
 
 private:
     // initiallizes data to -1000 to indicate that data is unavailable
@@ -57,7 +59,7 @@ private:
     double light_intensity;
     double temperature;
     double pressure;
-    double longtitude;
+    double longitude;
     double latitude;
 };*/
 

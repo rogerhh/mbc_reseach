@@ -862,22 +862,14 @@ int add_file_to_sqlite(const std::string& path,
             //std::cout << sql << "\n" << std::flush;
             rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
 
-/*
             if(rc != SQLITE_OK)
             {
                 std::string err_str = std::string(err_msg);
-                if(err_str.find("UNIQUE") != std::string::npos)
-                {
-                    std::cout << "Repeated entry\n";
-                }
-                else
-                {
-                    std::runtime_error e(err_msg);
-                    sqlite3_free(err_msg);
-                    throw e;
-                }
+                std::runtime_error e(err_msg);
+                sqlite3_free(err_msg);
+                throw e;
             }
-*/
+
             std::cout << "\r" << SN << " " << std::to_string(tm_seconds_since_epoch);
 
             data_count++;
@@ -900,6 +892,66 @@ int add_file_to_sqlite(const std::string& path,
     fin.close();
     std::cout << "Successfully added file: " << path << " with " << data_count << " data points.\n";
     return data_count;
+}
+
+
+int callback(void* v, int col_num, char** row_val, char** col_name)
+{
+    std::vector<DataPoint>* v_ptr = (std::vector<DataPoint>*) v;
+
+    // Note: the order the values are stored must match the order of the columns in the database
+    int serial_num = std::atoi(row_val[0]);
+    std::time_t time = (std::time_t) std::atoll(row_val[1]);
+    DataPoint data(serial_num, time);
+    data[DataPoint::LATITUDE] = std::atof(row_val[2]);
+    data[DataPoint::LONGITUDE] = std::atof(row_val[3]);
+    data[DataPoint::LIGHT_INTENSITY] = (row_val[4] != nullptr)? std::atof(row_val[4]) : -1000;
+    data[DataPoint::TEMPERATURE] = (row_val[5] != nullptr)? std::atof(row_val[5]) : -1000;
+    v_ptr->emplace_back(data);
+    return 0;
+}
+
+int get_datapoints_in_range(std::vector<DataPoint>& v,
+                            const int serial_num,
+                            const std::string& start_time_str,
+                            const std::string& end_time_str,
+                            const std::string& database_path)
+{
+    // clear all DataPoint's in vector
+    v.clear();
+    v.shrink_to_fit();
+
+    // connect with sqlite db
+    sqlite3* db;
+    int rc = sqlite3_open(database_path.c_str(), &db);
+    if(rc != SQLITE_OK)
+    {
+        std::stringstream ss;
+        ss << "Error connecting to sqlite database: " << database_path;
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    std::time_t start_time = read_time_format(start_time_str, 0);
+    std::time_t end_time = read_time_format(end_time_str, 0);
+
+    std::string sql = "SELECT * FROM SENSOR_DATA WHERE SN = " + 
+                      std::to_string(serial_num) +
+                      " AND SECONDS_AFTER_EPOCH >= " + 
+                      std::to_string(start_time) + 
+                      " AND SECONDS_AFTER_EPOCH < " + 
+                      std::to_string(end_time) + ";";
+    char* err_msg;
+    rc = sqlite3_exec(db, sql.c_str(), callback, &v, &err_msg);
+    if(rc != SQLITE_OK)
+    {
+        std::string err_str = std::string(err_msg);
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        throw e;
+    }
+
+    return v.size();
 }
 
 } // namespace MBC

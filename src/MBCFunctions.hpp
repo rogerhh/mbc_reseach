@@ -71,6 +71,15 @@ int add_file_to_sqlite(const std::string& path,
                        const std::string& end_time_str,
                        const std::string& database_path = DATABASE_DB);
 
+// Read datapoints from serial number in certain time range from sqlite database
+// Modifies vector passed in to only the datapoints in time range
+// return number of datapoints read
+int get_datapoints_in_range(std::vector<DataPoint>& v,
+                            const int serial_num,
+                            const std::string& start_time_str,
+                            const std::string& end_time_str,
+                            const std::string& database_path = DATABASE_DB);
+
 } // namespace MBC
 
 #endif

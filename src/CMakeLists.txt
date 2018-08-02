@@ -49,3 +49,16 @@ add_executable(read_data_into_database.exe
 
 target_link_libraries(read_data_into_database.exe
                       sqlite3)
+
+add_library(MBC
+            DataPoint.cpp
+            MBCFunctions.cpp)
+
+add_executable(read_from_range.exe
+               read_from_range.cpp
+               DataPoint.cpp
+               MBCFunctions.cpp)
+
+target_link_libraries(read_from_range.exe
+                      MBC
+                      sqlite3)

@@ -1,0 +1,6 @@
+figure(1);
+hold on;
+start_str = '07/01/18-00:00:00';
+end_str = '07/02/18-00:00:00';
+[t,s] = mex_test(20369359, start_str, end_str);
+plot(t,log10(s+), ':b');

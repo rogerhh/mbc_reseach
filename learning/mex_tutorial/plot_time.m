@@ -1,0 +1,10 @@
+figure(1);
+start_str = '07/05/18-04:00:00';
+end_str = '07/06/18-04:00:00';
+[t,s] = mex_test(20369364, start_str, end_str);
+plot(t,log10(s+1), '--b');
+hold on;
+[t,s] = mex_test(20369365, start_str, end_str);
+plot(t,log10(s+1), '--r');
+[t,s] = mex_test(20369366, start_str, end_str);
+plot(t,log10(s+1), '--g');

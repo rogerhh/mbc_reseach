@@ -1,0 +1,1 @@
+mex -lsqlite3 CXXFLAGS='$CXXFLAGS --std=c++11' mex_test.cpp ../../src/DataPoint.cpp ../../src/MBCFunctions.cpp;

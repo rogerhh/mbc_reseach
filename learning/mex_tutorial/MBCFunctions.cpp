@@ -656,7 +656,7 @@ void get_insertion_string(std::string& ret_str,
                           const std::string& table_name, 
                           int n, ...)
 {
-    ret_str = "INSERT OR REPLACE INTO " + table_name + " VALUES (";
+    ret_str = "INSERT OR IGNORE INTO " + table_name + " VALUES (";
     va_list vl;
     va_start(vl, n);
     for(int i = 0; i < n; i++)
@@ -773,7 +773,7 @@ int add_file_to_sqlite(const std::string& path,
     }
     else
     {
-        has_temp = false;
+        has_temp = true;
         fields_num++;
     }
     
@@ -921,14 +921,6 @@ int get_datapoints_in_range(std::vector<DataPoint>& v,
     v.clear();
     v.shrink_to_fit();
 
-    std::time_t start_time = read_time_format(start_time_str, 0);
-    std::time_t end_time = read_time_format(end_time_str, 0);
-
-    if(start_time >= end_time)
-    {
-        return 0;
-    }
-
     // connect with sqlite db
     sqlite3* db;
     int rc = sqlite3_open(database_path.c_str(), &db);
@@ -939,6 +931,9 @@ int get_datapoints_in_range(std::vector<DataPoint>& v,
         std::string msg = ss.str();
         throw std::runtime_error(msg);
     }
+
+    std::time_t start_time = read_time_format(start_time_str, 0);
+    std::time_t end_time = read_time_format(end_time_str, 0);
 
     std::string sql = "SELECT * FROM SENSOR_DATA WHERE SN = " + 
                       std::to_string(serial_num) +

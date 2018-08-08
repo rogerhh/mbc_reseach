@@ -1,1 +1,0 @@
-mex CXXFLAGS='$CXXF' mex_test.cpp;

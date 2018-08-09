@@ -2,6 +2,7 @@
 #include <string.h>
 #include <cstring>
 #include <locale>
+#include <stdexcept>
 
 #include "mex.h"
 #include "matrix.h"
@@ -24,13 +25,11 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     // check number of arguments
     if(nrhs > 3)
     {
-        std::cout << "Too many arguments. Usage: makeConstraint('variable name', 'operator', value)\n";
-        return;
+        throw std::runtime_error("Too many arguments. Usage: makeConstraint('variable name', 'operator', value)\n");
     }
     else if(nrhs < 3)
     {
-        std::cout << "Too few arguments. Usage: makeConstraint('variable name', 'operator', value)\n";
-        return;
+        throw std::runtime_error("Too few arguments. Usage: makeConstraint('variable name', 'operator', value)\n");
     }
 
     char cstr[64];
@@ -39,8 +38,7 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     // checks if first argument is a string
     if(mxGetString(prhs[0], cstr, 64))
     {
-        std::cout << "First argument invalid.\n";
-        return;
+        throw std::runtime_error("First argument invalid. Not a string\n");
     }
 
     // checks if variable name is valid 
@@ -76,51 +74,36 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     }
     else
     {
-        std::cout << "First argument invalid.\n";
-        return;
+        throw std::runtime_error("First argument invalid. Field name not supported\n");
     }
 
     // checks if second argument is a string
     mxGetString(prhs[1], cstr, 3);
     if(mxGetString(prhs[1], cstr, 3))
     {
-        std::cout << "Second argument invalid.\n";
-        return;
+        throw std::runtime_error("Second argument invalid. Not a string\n");
     }
 
     // checks if second argument is valid
     op = std::string(cstr);
-    if(op != "==" && op != "<=" && op != ">=")
+    if(op != "==" && op != "<=" && op != ">=" && op != "<" && op != ">")
     {
-        std::cout << "Second argument invalid.\n";
-        return;
+        throw std::runtime_error("Second argument invalid. Comparison operator not supported\n");
     }
 
     // checks val type and converts val to string
-    std::cout << *mxGetPr(prhs[2]) << "\n";
-    std::cout << mxGetClassID(prhs[2]) << "\n";
-    std::cout << mxIsUint16(prhs[2]) << "\n";
     if(var_name == "SECONDS_AFTER_EPOCH" || 
        var_name == "SN")
     {
-        int64_t* ptr = mxGetInt64s(prhs[2]);
-        if(!mxGetInt16s(prhs[2]))
-        {
-            std::cout << "xThird argument invalid.\n";
-            return;
-        }
-        // val = std::to_string(*ptr);
+        int64_t i = mxGetScalar(prhs[2]);
+        val = std::to_string(i);
     }
     else
     {
-        double* ptr = mxGetDoubles(prhs[2]);
-        if(!ptr)
-        {
-            std::cout << "Third argument invalid.\n";
-            return;
-        }
-        val = std::to_string(*ptr);
+        long double d = mxGetScalar(prhs[2]);
+        val = std::to_string(d);
     }
     strout = var_name + " " + op + " " + val;
-    std::cout << strout << "\n";
+    plhs[0] = mxCreateString(strout.c_str());
+    return;
 }

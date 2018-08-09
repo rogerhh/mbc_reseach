@@ -86,7 +86,7 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
 
     // checks if second argument is valid
     op = std::string(cstr);
-    if(op != "==" && op != "<=" && op != ">=" && op != "<" && op != ">")
+    if(op != "==" && op != "!=" && op != "<=" && op != ">=" && op != "<" && op != ">")
     {
         throw std::runtime_error("Second argument invalid. Comparison operator not supported\n");
     }

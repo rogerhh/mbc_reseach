@@ -21,7 +21,7 @@ public:
 
     DataPoint(const int serial_num_in, std::time_t time_in);
 
-    double& operator[](int index);
+    // double& operator[](int index);
 
     // static constant expressions for data fields
     static constexpr int SIZE_OF_DATA_FIELDS = 5;
@@ -34,9 +34,8 @@ public:
 
     static const std::vector<std::string> FIELD_STRINGS;
 
-private:
     // initiallizes data to -1000 to indicate that data is unavailable
-    std::vector<double> data = std::vector<double>(SIZE_OF_DATA_FIELDS, -1000);
+    std::vector<double> data;
 };
 
 std::ostream& operator<<(std::ostream& os, DataPoint& datapoint);

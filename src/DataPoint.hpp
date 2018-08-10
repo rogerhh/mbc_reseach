@@ -36,6 +36,14 @@ public:
 
     // initiallizes data to -1000 to indicate that data is unavailable
     std::vector<double> data;
+
+    struct less
+    {
+        bool operator()(const DataPoint& lhs, const DataPoint& rhs) const
+        {
+            return lhs.time < rhs.time;
+        }
+    };
 };
 
 std::ostream& operator<<(std::ostream& os, DataPoint& datapoint);

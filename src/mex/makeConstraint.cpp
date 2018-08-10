@@ -6,6 +6,9 @@
 
 #include "mex.h"
 #include "matrix.h"
+#include "../MBCFunctions.hpp"
+
+using namespace MBC;
 
 // converts input string to upper case
 void stringtoupper(char* ptr)
@@ -92,8 +95,21 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     }
 
     // checks val type and converts val to string
-    if(var_name == "SECONDS_AFTER_EPOCH" || 
-       var_name == "SN")
+    if(var_name == "SECONDS_AFTER_EPOCH")
+    {
+        // checks if third argument is string
+        // if not, read number
+        if(mxGetString(prhs[2], cstr, 64))
+        {
+            int64_t i = mxGetScalar(prhs[2]);
+            val = std::to_string(i);
+        }
+        else
+        {
+            val = std::to_string(read_time_format(std::string(cstr), 0));
+        }
+    }
+    else if(var_name == "SN")
     {
         int64_t i = mxGetScalar(prhs[2]);
         val = std::to_string(i);

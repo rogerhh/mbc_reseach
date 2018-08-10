@@ -1,0 +1,114 @@
+close all;
+figure(1);
+hold on;
+title('Actual sunrise time vs time light = 200 lux')
+xlabel('Sunrise time (seconds)');
+ylabel('Time when light = 200 lux');
+constr1 = makeConstraint('time', '>=', '07/05/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/05/18-11:00:00');
+constr3 = makeConstraint('light', '>', 198);
+constr4 = makeConstraint('light', '<', 202);
+constr5 = makeConstraint('SN', '==', 20369364);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530785089;
+x0 = [t];
+y0 = [time(1,:)];
+plot(x0,y0, 'og');
+
+constr1 = makeConstraint('time', '>=', '07/06/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/06/18-11:00:00');
+constr3 = makeConstraint('light', '>', 198);
+constr4 = makeConstraint('light', '<', 202);
+constr5 = makeConstraint('SN', '==', 20369364);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530871528;
+x0 = [t,t];
+y0 = [time(1,:)];
+plot(x0,y0, 'og');
+
+constr1 = makeConstraint('time', '>=', '07/07/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/07/18-11:00:00');
+constr3 = makeConstraint('light', '>', 199);
+constr4 = makeConstraint('light', '<', 201);
+constr5 = makeConstraint('SN', '==', 20369364);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530957969;
+x0 = [t];
+y0 = [time(1,:)];
+plot(x0,y0, 'og');
+
+
+constr1 = makeConstraint('time', '>=', '07/05/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/05/18-11:00:00');
+constr3 = makeConstraint('light', '>', 198);
+constr4 = makeConstraint('light', '<', 202);
+constr5 = makeConstraint('SN', '==', 20369365);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530785089;
+x0 = [t];
+y0 = [time(1,:)];
+plot(x0,y0, 'or');
+
+constr1 = makeConstraint('time', '>=', '07/06/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/06/18-11:00:00');
+constr3 = makeConstraint('light', '>', 199);
+constr4 = makeConstraint('light', '<', 201);
+constr5 = makeConstraint('SN', '==', 20369365);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530871528;
+x0 = [t];
+y0 = [time(1,:)];
+plot(x0,y0, 'or');
+
+constr1 = makeConstraint('time', '>=', '07/07/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/07/18-11:00:00');
+constr3 = makeConstraint('light', '>', 198);
+constr4 = makeConstraint('light', '<', 202);
+constr5 = makeConstraint('SN', '==', 20369365);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530957969;
+x0 = [t];
+y0 = [time(1,:)];
+plot(x0,y0, 'or');
+
+constr1 = makeConstraint('time', '>=', '07/05/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/05/18-11:00:00');
+constr3 = makeConstraint('light', '>', 198);
+constr4 = makeConstraint('light', '<', 202);
+constr5 = makeConstraint('SN', '==', 20369361);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530785089;
+x0 = [t];
+y0 = [time(1,:)];
+plot(x0,y0, 'ob');
+
+constr1 = makeConstraint('time', '>=', '07/06/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/06/18-11:00:00');
+constr3 = makeConstraint('light', '>', 198);
+constr4 = makeConstraint('light', '<', 202);
+constr5 = makeConstraint('SN', '==', 20369361);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530871528;
+x0 = [t,t];
+y0 = [time(1,:)];
+plot(x0,y0, 'ob');
+
+constr1 = makeConstraint('time', '>=', '07/07/18-09:00:00');
+constr2 = makeConstraint('time', '<', '07/07/18-11:00:00');
+constr3 = makeConstraint('light', '>', 198);
+constr4 = makeConstraint('light', '<', 202);
+constr5 = makeConstraint('SN', '==', 20369361);
+constr6 = andConstraint(constr1, constr2, constr3, constr4, constr5);
+[matrix, time, serial] = selectDatapoints(constr6, 'light');
+t = 1530957969;
+x0 = [t,t];
+y0 = [time(1,:)];
+plot(x0,y0, 'ob');

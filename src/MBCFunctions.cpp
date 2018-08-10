@@ -163,17 +163,18 @@ int add_file_to_sqlite(const std::string& path,
     if(title_str.find("Temp") != std::string::npos)
     {
         has_temp = true;
-        fields_num++;
+        fields_num = 1;
         if(title_str.find("Intensity") != std::string::npos)
         {
             has_light = true;
-            fields_num++;
+            fields_num = 2;
         }
     }
     else
     {
         has_temp = false;
-        fields_num++;
+        has_light = true;
+        fields_num = 1;
     }
     
     // convert start_time_str and end_time_str to time_t objects

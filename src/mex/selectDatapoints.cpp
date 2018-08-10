@@ -4,6 +4,7 @@
 #include <cstring>
 #include <locale>
 #include <stdexcept>
+#include <algorithm>
 
 #include "../DataPoint.hpp"
 #include "../MBCFunctions.hpp"
@@ -39,6 +40,7 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     }
     constraint_str = std::string(cstr);
 
+/*
     stringtoupper(cstr);
     datatype = std::string(cstr);
     if(datatype.find("TIME") != std::string::npos || 
@@ -72,12 +74,37 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     {
         throw std::runtime_error("Second argument invalid. Field name not supported\n");
     }
+*/
 
     std::vector<std::vector<DataPoint>> matrix;
     std::vector<int> serial_v;
 
     select_datapoints(matrix, serial_v, constraint_str);
-    std::cout << matrix.size() << "\n";
+
+    if(matrix.size() != 0)
+    {
+        plhs[0] = mxCreateDoubleMatrix(matrix.size(), matrix[0].size(), mxREAL);
+        plhs[1] = mxCreateDoubleMatrix(matrix.size(), matrix[0].size(), mxREAL);
+        plhs[2] = mxCreateDoubleMatrix(matrix.size(), 1, mxREAL);
+        double* indices = mxGetPr(plhs[0]);
+        double* time_index = mxGetPr(plhs[1]);
+        double* serial_index = mxGetPr(plhs[2]);
+        for(int i = 0; i < matrix.size(); i++)
+        {
+            std::sort(matrix[i].begin(), matrix[i].end(), DataPoint::less());
+            for(int j = 0; j < matrix[0].size(); j++)
+            {
+                indices[i + matrix.size() * j] = matrix[i][j].data[DataPoint::LIGHT_INTENSITY];
+                time_index[i + matrix.size() * j] = matrix[i][j].time;
+                std::cout << matrix[i][j].serial_num << " " << matrix[i][j].time << " " << matrix[i][j].data[DataPoint::LATITUDE] << " " << matrix[i][j].data[DataPoint::LONGITUDE] << " " << matrix[i][j].data[DataPoint::LIGHT_INTENSITY] << "\n";
+            }
+            serial_index[i] = serial_v[i];
+        }
+    }
+    else
+    {
+        std::cout << "No datapoint selected.\n";
+    }
 
     return;
 }

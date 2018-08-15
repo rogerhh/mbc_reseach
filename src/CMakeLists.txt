@@ -1,5 +1,6 @@
 add_library(libmbc
             DataPoint.cpp
+            WeatherData.cpp
             MBCFunctions.cpp)
 
 add_executable(read_data_into_database.exe

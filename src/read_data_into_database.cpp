@@ -105,7 +105,7 @@ int main (int argc, char** argv)
 
         try
         {
-            int count = add_file_to_sqlite(path, longitude, latitude, start_time_str, end_time_str);
+            int count = add_file_to_sqlite(path, latitude, longitude, start_time_str, end_time_str);
             data_count += count;
         }
         catch(runtime_error& e)

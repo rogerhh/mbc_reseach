@@ -69,9 +69,11 @@ void get_insertion_string(std::string& ret_str,
     return;
 }
 
+// TODO: rewrite sqlite3_exec function
+
 int add_file_to_sqlite(const std::string& path, 
-                       const double longitude,
                        const double latitude,
+                       const double longitude,
                        const std::string& start_time_str, 
                        const std::string& end_time_str,
                        const std::string& database_path)
@@ -294,13 +296,15 @@ int add_file_to_sqlite(const std::string& path,
     return data_count;
 }
 
-struct Handler
+int del_file_from_sqlite(const std::string& path,
+                         const std::string& start_time_str,
+                         const std::string& end_time_str,
+                         const std::string& database_path)
 {
-    std::vector<std::vector<DataPoint>>* datapoint_m;
-    std::vector<int>* serial_v;
-    int m_size;
-};
+    return 0;
+}
 
+/*
 int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
 {
     std::vector<std::vector<DataPoint>>& matrix 
@@ -342,6 +346,7 @@ int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
     ((Handler*) handler_ptr)->m_size++;
     return 0;
 }
+*/
 
 int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
                       std::vector<int>& serial_num_v,
@@ -374,14 +379,126 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
     sql = sql + ";";
 
     char* err_msg;
+    int size;
+
+/*
+    struct Handler
+    {
+        std::vector<std::vector<DataPoint>>* datapoint_m;
+        std::vector<int>* serial_v;
+        int m_size;
+
+        static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
+        {
+            std::vector<std::vector<DataPoint>>& matrix 
+                = *(((Handler*) handler_ptr)->datapoint_m);
+            std::vector<int>& serial_v = *(((Handler*) handler_ptr)->serial_v);
+
+            bool is_in_list = false;
+            int sn_index = 0;
+            int serial_num = std::atoi(row_val[0]);
+            std::time_t time = (std::time_t) std::atoll(row_val[1]);
+
+            // check if serial_number is in list
+            for(int i = 0; i < serial_v.size(); i++)
+            {
+                if(serial_num == serial_v[i])
+                {
+                    is_in_list = true;
+                    sn_index = i;
+                    break;
+                }
+            }
+
+            // if getting a datapoint from a new sensor
+            // create a new row in the return matrix
+            if(!is_in_list)
+            {
+                serial_v.push_back(serial_num);
+                matrix.push_back(std::vector<DataPoint>());
+                sn_index = serial_v.size() - 1;
+            }
+
+            // Note: the order the values are stored must match the order of the columns in the database
+            DataPoint datapoint(serial_num, time);
+            datapoint.data[DataPoint::LATITUDE] = std::atof(row_val[2]);
+            datapoint.data[DataPoint::LONGITUDE] = std::atof(row_val[3]);
+            datapoint.data[DataPoint::LIGHT_INTENSITY] 
+                = (row_val[4] != nullptr)? std::atof(row_val[4]) : -1000;
+            datapoint.data[DataPoint::TEMPERATURE] 
+                = (row_val[5] != nullptr)? std::atof(row_val[5]) : -1000;
+            matrix[sn_index].emplace_back(datapoint);
+            ((Handler*) handler_ptr)->m_size++;
+            return 0;
+        }
+    };
+*/
 
     // create handler object
+/*
     Handler handler;
     handler.datapoint_m = &matrix;
     handler.serial_v = &serial_num_v;
     handler.m_size = 0;
+*/
 
-    rc = sqlite3_exec(db, sql.c_str(), callback, &handler, &err_msg);
+    // TODO: replace this with sqlite3 prepare and stuff
+    sqlite3_stmt* stmt;
+    const char* pztail = nullptr;
+    do
+    {
+        rc = sqlite3_prepare_v2(db, sql.c_str(), 
+                sql.length(), &stmt, &pztail);
+        if(rc != SQLITE_OK)
+        {
+            std::string err_str = std::string(err_msg);
+            std::runtime_error e(err_msg);
+            sqlite3_free(err_msg);
+            throw e;
+        }
+        while(sqlite3_step(stmt) == SQLITE_ROW)
+        {
+            bool is_in_list = false;
+            int sn_index = 0;
+            int serial_num = sqlite3_column_int(stmt, 0);
+            std::time_t time = sqlite3_column_int64(stmt, 1);
+
+            // check if serial number is in list
+            for(int i = 0; i < serial_num_v.size(); i++)
+            {
+                if(serial_num == serial_num_v[i])
+                {
+                    is_in_list = true;
+                    sn_index = i;
+                    break;
+                }
+            }
+
+            // if getting a datapoint from a new sensor
+            // create a new row in the return matrix
+            if(!is_in_list)
+            {
+                serial_num_v.push_back(serial_num);
+                matrix.push_back(std::vector<DataPoint>());
+                sn_index = serial_num_v.size() - 1;
+            }
+
+            // Note: the order the values are stored must match 
+            // the order of the columns in the database
+            DataPoint datapoint(serial_num, time);
+            datapoint.data[DataPoint::LATITUDE] = sqlite3_column_double(stmt, 2);
+            datapoint.data[DataPoint::LONGITUDE] = sqlite3_column_double(stmt, 3);
+            datapoint.data[DataPoint::LIGHT_INTENSITY] 
+                = (sqlite3_column_bytes(stmt, 4) != 0)? sqlite3_column_double(stmt, 4) : -1000;
+            datapoint.data[DataPoint::TEMPERATURE] 
+                = (sqlite3_column_bytes(stmt, 5) != 0)? sqlite3_column_bytes(stmt, 5) : -1000;
+            matrix[sn_index].emplace_back(datapoint);
+            size++;
+        }
+        sqlite3_finalize(stmt);
+    } while(!pztail);
+
+/*
     if(rc != SQLITE_OK)
     {
         std::string err_str = std::string(err_msg);
@@ -389,16 +506,77 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
         sqlite3_free(err_msg);
         throw e;
     }
+*/
 
-    return handler.m_size;
+    return size;
 }
 
 
-int del_file_from_sqlite(const std::string& path,
-                         const std::string& start_time_str,
-                         const std::string& end_time_str,
-                         const std::string& database_path)
+int get_weather_data(std::vector<WeatherData>& v,
+                     const double latitude,
+                     const double longitude,
+                     const std::string& start_time_str,
+                     const std::string& end_time_str,
+                     const std::string& database_path)
 {
+    //  TODO: resize vector to exactly the number of hours between start_time and end_time
+    // clear return vector
+    v.clear();
+    v.shrink_to_fit();
+
+    // connect with sqlite db
+    sqlite3* db;
+    int rc = sqlite3_open(database_path.c_str(), &db);
+    if(rc != SQLITE_OK)
+    {
+        std::stringstream ss;
+        ss << "Error connecting to sqlite database: " << database_path;
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    // TODO: queries database for time period and location. For all
+    // time points at that location that are not in the database,
+    // add that time point into a vector that would later be used to download data
+    // from weather station. For all time points when there is data in the database,
+    // add to return vector
+
+    struct Handler
+    {
+        char* contents;
+        size_t size;
+
+        Handler()
+        {
+            contents = (char*) malloc(1);
+            size = 0;
+        }
+
+        static int write_callback(void* retrieved_data,
+                                  size_t retrieved_size,
+                                  size_t nmemb,
+                                  Handler* userptr)
+        {
+            size_t real_size = retrieved_size * nmemb;
+            void* ptr = (char*) realloc(userptr->contents, userptr->size + real_size + 1);
+            
+            if(!ptr)
+            {
+                std::cout << "Not enough memory.\n";
+                return 0;
+            }
+            memcpy(userptr->contents + userptr->size, retrieved_data, real_size);
+            userptr->size = real_size;
+            userptr->contents[userptr->size] = '\0';
+            return real_size;
+        }
+
+        ~Handler()
+        {
+            free(contents);
+        }
+    };
+
     return 0;
 }
 

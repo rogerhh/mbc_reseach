@@ -7,6 +7,7 @@
 #include <stdarg.h>
 
 #include "DataPoint.hpp"
+#include "WeatherData.hpp"
 
 namespace MBC
 {
@@ -27,8 +28,8 @@ void get_insertion_string(std::string& ret_str,
 
 // add .hobo file to sqlite database
 int add_file_to_sqlite(const std::string& path,
-                       const double longitude,
                        const double latitude,
+                       const double longitude,
                        const std::string& start_time_str,
                        const std::string& end_time_str,
                        const std::string& database_path = DATABASE_DB);
@@ -47,6 +48,17 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
                       std::vector<int>& serial_num_v,
                       const std::string& constraint_str,
                       const std::string& database_path = DATABASE_DB);
+
+// gets weather parameters in a given time period denoted by 
+// start_time_str <= time < end_time_str
+// If the data is not already in the database, download data
+// with API call to meteoblue
+int get_weather_data(std::vector<WeatherData>& v,
+                     const double latitude,
+                     const double longitude,
+                     const std::string& start_time_str,
+                     const std::string& end_time_str,
+                     const std::string& database_path = DATABASE_DB);
 
 } // namespace MBC
 

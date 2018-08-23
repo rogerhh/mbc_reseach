@@ -10,6 +10,7 @@
 #include <iomanip>
 #include <time.h>
 #include <sqlite3.h>
+#include <curl/curl.h>
 
 namespace MBC
 {
@@ -41,13 +42,63 @@ std::time_t read_time_format(const std::string& time_string, const double GMT_ti
     return timegm(&time);
 }
 
+std::tm read_tm_format(const std::string& time_string, const double GMT_time)
+{
+    if(time_string.length() != 17)
+    {
+        std::cout << time_string << "\n";
+        throw std::runtime_error("wrong time string length\n");
+    }
+    int hr_shift = floor(GMT_time);
+    int min_shift = (hr_shift == GMT_time)? 0 : 30;
+    std::tm time;
+    time.tm_mon = stoi(time_string.substr(0, 2)) - 1;
+    time.tm_mday = stoi(time_string.substr(3, 2));
+    time.tm_year = stoi(time_string.substr(6, 2)) + 2000 - 1900;
+    time.tm_hour = stoi(time_string.substr(9, 2)) - hr_shift;
+    time.tm_min = stoi(time_string.substr(12, 2)) - min_shift;
+    time.tm_sec = stoi(time_string.substr(15, 2));
+    time.tm_isdst = -1;
+    return time;
+}
+
+std::tm read_tm_string(const std::string& time_string, const double GMT_time)
+{
+    // read date
+    std::tm tm;
+    std::string str;
+    int lastpos = 0;
+    tm.tm_isdst = -1;
+    get_string(str, time_string, "/", lastpos);
+    tm.tm_mon = std::stoi(str) - 1;         // month index starts from 0
+    get_string(str, time_string, "/", lastpos);
+    tm.tm_mday = std::stoi(str);
+    get_string(str, time_string, "-", lastpos);
+    tm.tm_year = std::stoi(str);
+    tm.tm_year = tm.tm_year + 2000 - 1900;  // years since the Epoch
+
+    // read time
+    std::string sign;
+    get_string(str, time_string, ":", lastpos);
+    tm.tm_hour = std::stoi(str);
+    get_string(str, time_string, ":", lastpos);
+    tm.tm_min = std::stoi(str);
+    get_string(str, time_string, " ", lastpos);
+    tm.tm_sec = std::stoi(str);
+    get_string(sign, time_string, ",", lastpos);
+    if(tm.tm_hour == 12 && sign == "AM") { tm.tm_hour = 0; }
+    else if(tm.tm_hour != 12 && sign == "PM") { tm.tm_hour += 12; }
+    tm.tm_hour -= GMT_time;
+    return tm;
+}
+
 void get_string(std::string& str, const std::string& source, 
                 const std::string& delim, int& lastpos)
 {
     int pos = source.find(delim, lastpos);
     if(pos == std::string::npos) { return; }
     str = source.substr(lastpos, pos - lastpos);
-    lastpos = pos + 1;
+    lastpos = pos + delim.length();
     return;
 }
 
@@ -116,9 +167,8 @@ int add_file_to_sqlite(const std::string& path,
     }
 
     std::string table_name = "SENSOR_DATA";
-    // start by begining transaction
-    std::string sql = "BEGIN TRANSACTION;" \
-                      "CREATE TABLE IF NOT EXISTS " + table_name + " (" \
+
+    std::string sql = "CREATE TABLE IF NOT EXISTS " + table_name + " (" \
                       "SN INT NOT NULL,"    \
                       "SECONDS_AFTER_EPOCH INT NOT NULL,"    \
                       "LATITUDE REAL NOT NULL,"    \
@@ -136,9 +186,16 @@ int add_file_to_sqlite(const std::string& path,
         sqlite3_free(err_msg);
         throw e;
     }
-    else
+
+    // begin transaction
+    sql = "BEGIN TRANSACTION;";
+    rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+    if(rc != SQLITE_OK)
     {
-        // std::cout << "Successfullly created table\n";
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        throw e;
     }
 
     // read sensor SN
@@ -253,7 +310,7 @@ int add_file_to_sqlite(const std::string& path,
                 light_data = data_value2;
             }
             std::string sql;
-            get_insertion_string(sql, "SENSOR_DATA", 6, 
+            get_insertion_string(sql, table_name, 6, 
                                  SN,
                                  std::to_string(tm_seconds_since_epoch),
                                  std::to_string(latitude),
@@ -381,7 +438,6 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
     char* err_msg;
     int size;
 
-/*
     struct Handler
     {
         std::vector<std::vector<DataPoint>>* datapoint_m;
@@ -421,28 +477,29 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
 
             // Note: the order the values are stored must match the order of the columns in the database
             DataPoint datapoint(serial_num, time);
-            datapoint.data[DataPoint::LATITUDE] = std::atof(row_val[2]);
-            datapoint.data[DataPoint::LONGITUDE] = std::atof(row_val[3]);
+            datapoint.data[DataPoint::LATITUDE] = std::stold(std::string(row_val[2]));
+            datapoint.data[DataPoint::LONGITUDE] = std::stold(std::string(row_val[3]));
             datapoint.data[DataPoint::LIGHT_INTENSITY] 
-                = (row_val[4] != nullptr)? std::atof(row_val[4]) : -1000;
+                = (row_val[4] != nullptr)? std::stold(std::string(row_val[4])) : -1000;
             datapoint.data[DataPoint::TEMPERATURE] 
-                = (row_val[5] != nullptr)? std::atof(row_val[5]) : -1000;
+                = (row_val[5] != nullptr)? std::stold(std::string(row_val[5])) : -1000;
             matrix[sn_index].emplace_back(datapoint);
             ((Handler*) handler_ptr)->m_size++;
             return 0;
         }
     };
-*/
 
     // create handler object
-/*
     Handler handler;
     handler.datapoint_m = &matrix;
     handler.serial_v = &serial_num_v;
     handler.m_size = 0;
-*/
+
+    rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
+    std::cout << matrix.size() << "\n";
 
     // TODO: replace this with sqlite3 prepare and stuff
+/*
     sqlite3_stmt* stmt;
     const char* pztail = nullptr;
     do
@@ -497,8 +554,8 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
         }
         sqlite3_finalize(stmt);
     } while(!pztail);
+*/
 
-/*
     if(rc != SQLITE_OK)
     {
         std::string err_str = std::string(err_msg);
@@ -506,9 +563,7 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
         sqlite3_free(err_msg);
         throw e;
     }
-*/
-
-    return size;
+    return handler.m_size;
 }
 
 
@@ -519,6 +574,9 @@ int get_weather_data(std::vector<WeatherData>& v,
                      const std::string& end_time_str,
                      const std::string& database_path)
 {
+    std::time_t start_time = read_time_format(start_time_str, 0);
+    std::time_t end_time = read_time_format(end_time_str, 0);
+
     //  TODO: resize vector to exactly the number of hours between start_time and end_time
     // clear return vector
     v.clear();
@@ -577,8 +635,207 @@ int get_weather_data(std::vector<WeatherData>& v,
         }
     };
 
+    // TODO: api call to meteoblue to get data and store to database
+
     return 0;
 }
 
-} // namespace MBC
+// TODO: change everything to long double
 
+SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
+                                          const long double latitude,
+                                          const long double longitude,
+                                          const std::string& database_path)
+{
+    // connect with sqlite db
+    sqlite3* db;
+    int rc = sqlite3_open(database_path.c_str(), &db);
+    if(rc != SQLITE_OK)
+    {
+        std::stringstream ss;
+        ss << "Error connecting to sqlite database: " << database_path;
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    // create table if not exist
+    std::string table_name = "SUNRISE_SUNSET_DATA";
+    std::string sql = "CREATE TABLE IF NOT EXISTS " + table_name + " (" \
+                      "DATE TEXT NOT NULL," \
+                      "LATITUDE REAL NOT NULL," \
+                      "LONGITUDE REAL NOT NULL," \
+                      "SUNRISE_TIME INT NOT NULL," \
+                      "SUNSET_TIME INT NOT NULL," \
+                      "PRIMARY KEY (DATE, LATITUDE, LONGITUDE))";
+
+    char* err_msg = nullptr;
+    rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+    if(rc != SQLITE_OK)
+    {
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        throw e;
+    }
+
+    // read from database. If date and location is in database, return that data value
+    sql = "SELECT * FROM SUNRISE_SUNSET_DATA WHERE DATE = \"" + date  + "\" AND " \
+          "LATITUDE = " + std::to_string(latitude) + " AND " \
+          "LONGITUDE = " + std::to_string(longitude) + ";";
+    
+    struct Handler
+    {
+        SunriseSunsetData data;
+
+        bool got_data_flag;
+
+        static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
+        {
+            Handler* ptr = (Handler*) handler_ptr;
+            ptr->got_data_flag = true;
+            std::string date_in = std::string(row_val[0]);
+            long double lat = std::stold(std::string(row_val[1]));
+            long double lng = std::stold(std::string(row_val[2]));
+            std::time_t sunrise_time = std::atoll(row_val[3]);
+            std::time_t sunset_time = std::atoll(row_val[4]);
+            ptr->data = SunriseSunsetData(date_in, lat, lng, sunrise_time, sunset_time);
+            return 0;
+        }
+    };
+
+    Handler handler;
+    handler.got_data_flag = false;
+    rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
+
+    if(rc != SQLITE_OK)
+    {
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        throw e;
+    }
+
+    if(handler.got_data_flag)
+    {
+        std::cout << "debug: read from database.\n";
+        return handler.data;
+    }
+
+    struct memory_t
+    {
+        char* contents;
+        size_t size;
+        memory_t()
+        {
+            contents = (char*) malloc(1);
+            size = 0;
+        }
+        ~memory_t()
+        {
+            free(contents);
+        }
+
+        static size_t write_callback(char* data, size_t size, size_t nmemb, memory_t* userptr)
+        {
+            size_t real_size = size * nmemb;
+            userptr->contents = (char*) realloc(userptr->contents, userptr->size + real_size + 1);
+            if(!userptr->contents)
+            {
+                std::cout << "Not enough memory.\n";
+                return 0;
+            }
+
+            memcpy(userptr->contents + userptr->size, data, real_size);
+            userptr->size += real_size;
+            userptr->contents[userptr->size] = '\0';
+            return real_size;
+        }
+    };
+    
+    CURL* curl;
+    CURLcode res;
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    curl = curl_easy_init();
+
+    memory_t data;
+    if(curl)
+    {
+        // if date and location is not in database, call api to retrieve data value from the web
+        std::tm date_tm = read_tm_format(date + "-00:00:00", 0);
+        std::string date_str = std::to_string(date_tm.tm_year + 1900) + "-" +
+                               std::to_string(date_tm.tm_mon + 1) + "-" +
+                               std::to_string(date_tm.tm_mday);
+        std::string url = "https://api.sunrise-sunset.org/json?" \
+                          "&lat=" + std::to_string(latitude) +
+                          "&lng=" + std::to_string(longitude) +
+                          "&date=" + date_str;
+
+        curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+        curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+        curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_t::write_callback);
+        curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
+
+        res = curl_easy_perform(curl);
+        if(res != CURLE_OK)
+        {
+            std::cout << "Error: " << curl_easy_strerror(res) << "\n";
+        }
+    }
+
+    curl_global_cleanup();
+
+    std::cout << "debug: read from web\n";
+    std::cout << data.contents << "\n";
+
+    std::string result = std::string(data.contents);
+    if(result.find("\"status\":\"OK\"") == std::string::npos)
+    {
+        throw std::runtime_error("Load sunrise-sunset api error\n");
+    }
+
+    std::string str;
+    int lastpos = 0;
+    get_string(str, result, "\"sunrise\":\"", lastpos);
+    get_string(str, result, "\"", lastpos);
+    str = date + "-" + str;
+    std::cout << "debug: str = " << str << "\n";
+    std::tm sunrise_tm = read_tm_string(str, 0);
+    std::time_t sunrise_time = timegm(&sunrise_tm);
+
+    get_string(str, result, "\"sunset\":\"", lastpos);
+    get_string(str, result, "\"", lastpos);
+    str = date + "-" + str;
+    std::cout << "debug: str = " << str << "\n";
+    std::tm sunset_tm = read_tm_string(str, 0);
+    std::time_t sunset_time = timegm(&sunset_tm);
+
+    if(sunrise_time >= sunset_time)
+    {
+        sunset_tm.tm_mday++;
+        sunset_time = timegm(&sunset_tm);
+    }
+
+    std::cout << "debug: sunrise = " << sunrise_time << " sunset = " << sunset_time << "\n";
+
+    get_insertion_string(sql, table_name, 5,
+                         "\"" + date + "\"",
+                         std::to_string(latitude),
+                         std::to_string(longitude),
+                         std::to_string(sunrise_time),
+                         std::to_string(sunset_time));
+
+    std::cout << "debug: sql = " << sql << "\n";
+
+    rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+    if(rc != SQLITE_OK)
+    {
+        std::string err_str = std::string(err_msg);
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        throw e;
+    }
+
+    return SunriseSunsetData(date, latitude, longitude, sunrise_time, sunset_time);
+}
+
+} // namespace MBC

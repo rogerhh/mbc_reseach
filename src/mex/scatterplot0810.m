@@ -4,7 +4,7 @@ hold on;
 title('Actual sunrise time vs time light = 100 lux')
 xlabel('Sunrise time from daily offset (seconds)');
 ylabel('Time when light = 100 lux form daily offset (seconds)');
-plot([t1,t2,t3], [t1,t2,t3], 'ok');
+%plot([t1,t2,t3], [t1,t2,t3], 'ok');
 axis([2.12 * 10^4, 2.26 * 10^4, 2.12 * 10^4, 2.26 * 10^4]);
 legend('Actual Sunrise');
 constr1 = makeConstraint('time', '>=', '07/05/18-09:00:00');

@@ -40,47 +40,40 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     }
     constraint_str = std::string(cstr);
 
-/*
-    stringtoupper(cstr);
-    datatype = std::string(cstr);
-    if(datatype.find("TIME") != std::string::npos || 
-       datatype.find("SECOND") != std::string::npos)
-    {
-        datatype = "SECONDS_AFTER_EPOCH";
-    }
-    else if(datatype.find("SN") != std::string::npos ||
-            datatype.find("SERIAL") != std::string::npos)
-    {
-        datatype = "SN";
-    }
-    else if(datatype.find("LAT") != std::string::npos)
-    {
-        datatype = "LATITUDE";
-    }
-    else if(datatype.find("LON") != std::string::npos ||
-            datatype.find("LNG") != std::string::npos)
-    {
-        datatype = "LONGITUDE";
-    }
-    else if(datatype.find("LIGHT") != std::string::npos)
-    {
-        datatype = "LIGHT_INTENSITY";
-    }
-    else if(datatype.find("TEMP") != std::string::npos)
-    {
-        datatype = "TERMPERATURE";
-    }
-    else
-    {
-        throw std::runtime_error("Second argument invalid. Field name not supported\n");
-    }
-*/
-
     std::vector<std::vector<DataPoint>> matrix;
     std::vector<int> serial_v;
 
     select_datapoints(matrix, serial_v, constraint_str);
 
+    // use mxCreateStructMatrix to create a 1*n(i) array of DataPoint's
+    // then use mxCreateCellArray to create a m*1 array of struct matrices
+    
+    const char** fieldnames = DataPoint::FIELD_NAMES;
+    mxArray* cellarr = mxCreateCellMatrix(matrix.size(), 1);
+
+    for(int i = 0; i < matrix.size(); i++)
+    {
+        mxArray* struct_arr = mxCreateStructMatrix(1, matrix[i].size(), 
+                                                   DataPoint::SIZE_OF_FIELD_NAMES,
+                                                   DataPoint::FIELD_NAMES);
+        for(int j = 0; j < matrix[i].size(); j++)
+        {
+            mxArray* mx_ptr = mxCreateDoubleScalar(matrix[i][j].serial_num);
+            mxSetFieldByNumber(struct_arr, j, 0, mx_ptr);
+            mx_ptr = mxCreateDoubleScalar(matrix[i][j].time);
+            mxSetFieldByNumber(struct_arr, j, 1, mx_ptr);
+            for(int k = 0; k < DataPoint::SIZE_OF_FIELD_NAMES - 2; k++)
+            {
+                mx_ptr = mxCreateDoubleScalar(matrix[i][j].data[k]);
+                mxSetFieldByNumber(struct_arr, j, k + 2, mx_ptr);
+            }
+        }
+        mxSetCell(cellarr, i, struct_arr);
+    }
+
+    plhs[0] = cellarr;
+
+/*
     if(matrix.size() != 0)
     {
         plhs[0] = mxCreateDoubleMatrix(matrix.size(), matrix[0].size(), mxREAL);
@@ -101,10 +94,14 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
             serial_index[i] = serial_v[i];
         }
     }
+*/
+
+/*
     else
     {
         std::cout << "No datapoint selected.\n";
     }
+*/
 
     return;
 }

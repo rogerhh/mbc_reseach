@@ -28,9 +28,9 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
 {
     std::string constraint_str, datatype;
     int data_index;
-    if(nrhs != 2)
+    if(nrhs != 1)
     {
-        throw std::runtime_error("Usage: selectDatapoints(constraint, field name)\n");
+        throw std::runtime_error("Usage: selectDatapoints(constraint)\n");
     }
 
     char cstr[2048];

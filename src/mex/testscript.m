@@ -1,2 +1,2 @@
-constr4 = makeConstraint('light', '<', 101);
+constr4 = makeConstraint('temp', '<', 20);
 matrix = selectDatapoints(constr4, 'light');

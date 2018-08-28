@@ -13,10 +13,12 @@ WeatherData::WeatherData()
     data = std::vector<double>(SIZE_OF_DATA_FIELDS, -1000);
 }
 
-WeatherData::WeatherData(std::time_t time_in)
+WeatherData::WeatherData(const std::time_t time_in, const double latitude, const double longitude)
 : time(time_in)
 {
     data = std::vector<double>(SIZE_OF_DATA_FIELDS, -1000);
+    data[LATITUDE] = latitude;
+    data[LONGITUDE] = longitude;
 }
 
 std::ostream& operator<<(std::ostream& os, WeatherData& weatherdata)

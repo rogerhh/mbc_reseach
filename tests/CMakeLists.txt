@@ -13,3 +13,10 @@ add_executable(sunrise_sunset_test.exe
 
 target_link_libraries(sunrise_sunset_test.exe
                       libmbc)
+
+add_executable(get_weather_data_test.exe
+               get_weather_data_test.cpp
+               unit_test_framework.cpp)
+
+target_link_libraries(get_weather_data_test.exe
+                      libmbc)

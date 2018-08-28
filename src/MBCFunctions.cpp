@@ -14,6 +14,19 @@
 
 namespace MBC
 {
+bool operator<(std::tm& lhs, std::tm& rhs)
+{
+    std::time_t lhs_time = timegm(&lhs);
+    std::time_t rhs_time = timegm(&rhs);
+    return lhs_time < rhs_time;
+}
+
+bool operator==(std::tm& lhs, std::tm& rhs)
+{
+    std::time_t lhs_time = timegm(&lhs);
+    std::time_t rhs_time = timegm(&rhs);
+    return lhs_time == rhs_time;
+}
 
 void replace_string(std::string& str,
                     const std::string& from,
@@ -90,6 +103,46 @@ std::tm read_tm_string(const std::string& time_string, const double GMT_time)
     else if(tm.tm_hour != 12 && sign == "PM") { tm.tm_hour += 12; }
     tm.tm_hour -= GMT_time;
     return tm;
+}
+
+// get string in the form mm/dd/yy-hh:mm:ss
+std::string tm_to_string(std::tm tm)
+{
+    char temp[64];
+    std::strftime(temp, sizeof(temp), "", &tm);
+    std::string yr, mon, day, hr, min, sec;
+    yr = std::to_string(tm.tm_year + 1900 - 2000);
+    mon = std::to_string(tm.tm_mon + 1);
+    mon = (mon.length() < 2)? "0" + mon : mon;
+    day = std::to_string(tm.tm_mday);
+    day = (day.length() < 2)? "0" + day : day;
+    hr = std::to_string(tm.tm_hour);
+    hr = (hr.length() < 2)? "0" + hr : hr;
+    min = std::to_string(tm.tm_min);
+    min = (min.length() < 2)? "0" + min : min;
+    sec = std::to_string(tm.tm_sec);
+    sec = (sec.length() < 2)? "0" + sec : sec;
+    return mon + "/" + day + "/" + yr + "-" + hr + ":" + min + ":" + sec;
+}
+
+// get string in the form yyyy-mm-dd
+std::string tm_to_full_string(std::tm tm)
+{
+    char temp[64];
+    std::strftime(temp, sizeof(temp), "", &tm);
+    std::string yr, mon, day, hr, min, sec;
+    yr = std::to_string(tm.tm_year + 1900);
+    mon = std::to_string(tm.tm_mon + 1);
+    mon = (mon.length() < 2)? "0" + mon : mon;
+    day = std::to_string(tm.tm_mday);
+    day = (day.length() < 2)? "0" + day : day;
+    hr = std::to_string(tm.tm_hour);
+    hr = (hr.length() < 2)? "0" + hr : hr;
+    min = std::to_string(tm.tm_min);
+    min = (min.length() < 2)? "0" + min : min;
+    sec = std::to_string(tm.tm_sec);
+    sec = (sec.length() < 2)? "0" + sec : sec;
+    return yr + "-" + mon + "-" + day;
 }
 
 void get_string(std::string& str, const std::string& source, 
@@ -498,64 +551,6 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
     rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
     std::cout << matrix.size() << "\n";
 
-    // TODO: replace this with sqlite3 prepare and stuff
-/*
-    sqlite3_stmt* stmt;
-    const char* pztail = nullptr;
-    do
-    {
-        rc = sqlite3_prepare_v2(db, sql.c_str(), 
-                sql.length(), &stmt, &pztail);
-        if(rc != SQLITE_OK)
-        {
-            std::string err_str = std::string(err_msg);
-            std::runtime_error e(err_msg);
-            sqlite3_free(err_msg);
-            throw e;
-        }
-        while(sqlite3_step(stmt) == SQLITE_ROW)
-        {
-            bool is_in_list = false;
-            int sn_index = 0;
-            int serial_num = sqlite3_column_int(stmt, 0);
-            std::time_t time = sqlite3_column_int64(stmt, 1);
-
-            // check if serial number is in list
-            for(int i = 0; i < serial_num_v.size(); i++)
-            {
-                if(serial_num == serial_num_v[i])
-                {
-                    is_in_list = true;
-                    sn_index = i;
-                    break;
-                }
-            }
-
-            // if getting a datapoint from a new sensor
-            // create a new row in the return matrix
-            if(!is_in_list)
-            {
-                serial_num_v.push_back(serial_num);
-                matrix.push_back(std::vector<DataPoint>());
-                sn_index = serial_num_v.size() - 1;
-            }
-
-            // Note: the order the values are stored must match 
-            // the order of the columns in the database
-            DataPoint datapoint(serial_num, time);
-            datapoint.data[DataPoint::LATITUDE] = sqlite3_column_double(stmt, 2);
-            datapoint.data[DataPoint::LONGITUDE] = sqlite3_column_double(stmt, 3);
-            datapoint.data[DataPoint::LIGHT_INTENSITY] 
-                = (sqlite3_column_bytes(stmt, 4) != 0)? sqlite3_column_double(stmt, 4) : -1000;
-            datapoint.data[DataPoint::TEMPERATURE] 
-                = (sqlite3_column_bytes(stmt, 5) != 0)? sqlite3_column_bytes(stmt, 5) : -1000;
-            matrix[sn_index].emplace_back(datapoint);
-            size++;
-        }
-        sqlite3_finalize(stmt);
-    } while(!pztail);
-*/
-
     if(rc != SQLITE_OK)
     {
         std::string err_str = std::string(err_msg);
@@ -568,8 +563,8 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
 
 
 int get_weather_data(std::vector<WeatherData>& v,
-                     const double latitude,
-                     const double longitude,
+                     const long double latitude,
+                     const long double longitude,
                      const std::string& start_time_str,
                      const std::string& end_time_str,
                      const std::string& database_path)
@@ -593,32 +588,111 @@ int get_weather_data(std::vector<WeatherData>& v,
         throw std::runtime_error(msg);
     }
 
-    // TODO: queries database for time period and location. For all
-    // time points at that location that are not in the database,
-    // add that time point into a vector that would later be used to download data
-    // from weather station. For all time points when there is data in the database,
-    // add to return vector
+    std::string dates_table_name = "WEATHER_DATA_DATES";
+    std::string sql = "CREATE TABLE IF NOT EXISTS " + dates_table_name + " (" \
+                      "DATE TEXT NOT NULL);";
 
-    struct Handler
+    char* err_msg = nullptr;
+
+    rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+    if(rc != SQLITE_OK)
+    {
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        throw e;
+    }
+
+    std::tm start_time_tm = read_tm_format(start_time_str, 0);
+    start_time_tm.tm_hour = 0;
+    start_time_tm.tm_min = 0;
+    start_time_tm.tm_sec = 0;
+
+    std::tm end_time_tm = read_tm_format(end_time_str, 0);
+    end_time_tm.tm_hour = 0;
+    end_time_tm.tm_min = 0;
+    end_time_tm.tm_sec = 0;
+
+    std::vector<std::tm> new_dates;
+    std::cout << "debug: 1\n";
+
+    // gets all the dates that are not in the database into new_dates
+    // directly comparing seconds after epoch for safety reasons
+    while(start_time_tm < end_time_tm)
+    {
+        std::string date_str = tm_to_string(start_time_tm).substr(0, 8);
+        sql = "SELECT * FROM " + dates_table_name + " WHERE DATE = " + date_str;
+        std::cout << "debug: sql = " << sql << "\n";
+
+        struct Handler
+        {
+            bool flag;
+            
+            Handler()
+            {
+                flag = false;
+            }
+
+            static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
+            {
+                Handler* ptr = (Handler*) handler_ptr;
+                ptr->flag = true;
+                return 0;
+            }
+        };
+
+        Handler handler;
+
+        rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
+        
+        if(rc != SQLITE_OK)
+        {
+            std::string err_str = std::string(err_msg);
+            std::runtime_error e(err_msg);
+            sqlite3_free(err_msg);
+            throw e;
+        }
+
+        // if callback function is not called, then the date is not found in the database,
+        // add date to new_dates
+        if(!handler.flag)
+        {
+            new_dates.push_back(start_time_tm);
+        }
+
+        start_time_tm.tm_mday++;
+
+        // standardize start_time_tm
+        char temp[64];
+        std::strftime(temp, sizeof(temp), "", &start_time_tm);
+    }
+
+    struct memory_t
     {
         char* contents;
         size_t size;
 
-        Handler()
+        memory_t()
         {
             contents = (char*) malloc(1);
             size = 0;
         }
 
+        ~memory_t()
+        {
+            std::cout << "destructor called\n";
+            free(contents);
+        }
+
         static int write_callback(void* retrieved_data,
                                   size_t retrieved_size,
                                   size_t nmemb,
-                                  Handler* userptr)
+                                  memory_t* userptr)
         {
             size_t real_size = retrieved_size * nmemb;
-            void* ptr = (char*) realloc(userptr->contents, userptr->size + real_size + 1);
+            userptr->contents = (char*) realloc(userptr->contents, userptr->size + real_size + 1);
             
-            if(!ptr)
+            if(!userptr->contents)
             {
                 std::cout << "Not enough memory.\n";
                 return 0;
@@ -628,14 +702,51 @@ int get_weather_data(std::vector<WeatherData>& v,
             userptr->contents[userptr->size] = '\0';
             return real_size;
         }
-
-        ~Handler()
-        {
-            free(contents);
-        }
     };
 
-    // TODO: api call to meteoblue to get data and store to database
+    CURL* curl;
+    CURLcode res;
+    curl_global_init(CURL_GLOBAL_DEFAULT);
+    curl = curl_easy_init();
+
+    std::cout << "debug: 0\n";
+
+    if(curl)
+    {
+        std::tm last_end_date_tm = new_dates[0];
+        for(auto& new_start_date_tm : new_dates)
+        {
+            if(new_start_date_tm < last_end_date_tm)
+            {
+                continue;
+            }
+            last_end_date_tm = new_start_date_tm;
+            last_end_date_tm.tm_mday += 7;
+            std::string new_start_date_str = tm_to_full_string(new_start_date_tm);
+            std::string last_end_date_str = tm_to_full_string(last_end_date_tm);
+            std::string url = "https://api.weatherbit.io/v2.0/history/hourly" \
+                              "?lat=" + std::to_string(latitude) +
+                              "&lon=" + std::to_string(longitude) +
+                              "&start_date=" + new_start_date_str +
+                              "&end_date=" + last_end_date_str +
+                              "&key=" + std::string(weatherbit_api_key);
+            std::cout << "debug: " << url << "\n";
+            memory_t data;
+            curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+            curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
+            curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_t::write_callback);
+            curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
+
+            res = curl_easy_perform(curl);
+            if(res != CURLE_OK)
+            {
+                std::cout << "Error: " << curl_easy_strerror(res) << "\n";
+            }
+            std::cout << "debug: contents = " << data.contents << "\n";
+        }
+    }
+
+    curl_global_cleanup();
 
     return 0;
 }

@@ -9,7 +9,7 @@
 namespace MBC
 {
 
-// data structure to store hourly accurate weather data
+// data structure to store hourly accurate weather data at location
 class WeatherData
 {
 public:
@@ -17,10 +17,10 @@ public:
     
     WeatherData();
 
-    WeatherData(std::time_t time_in);
+    WeatherData(const std::time_t time_in, const double latitude, const double longitude);
 
     // startic constant expressions for data fields
-    static constexpr int SIZE_OF_DATA_FIELDS = 100;
+    static constexpr int SIZE_OF_DATA_FIELDS = 31;
 
     // basic package
     static constexpr int PRECIPITATION              = 0;
@@ -56,6 +56,10 @@ public:
     static constexpr int DNI                        = 26;
     static constexpr int GNI                        = 27;
     static constexpr int EXTRATERRESTRIAL_SOLAR_RADIATION = 28;
+
+    // location
+    static constexpr int LATITUDE                   = 29;
+    static constexpr int LONGITUDE                  = 30;
 
     // data is initiallized to -1000 to indicate that data is unavailable
     std::vector<double> data;

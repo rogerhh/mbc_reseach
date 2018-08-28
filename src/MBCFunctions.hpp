@@ -13,14 +13,18 @@
 
 namespace MBC
 {
+bool operator<(const std::tm& lhs, const std::tm& rhs);
+bool operator==(const std::tm& lhs, const std::tm& rhs);
 
 // file path to database.db
 static const std::string DATABASE_DB = std::string(mbc_source_dir) + "/data/mbc_database.db";
 
 std::time_t read_time_format(const std::string& time_string, const double GMT_time);
 
+// read string in mm/dd/yy-hh/mm/ss format
 std::tm read_tm_format(const std::string& time_string, const double GMT_time);
 
+// read AM and PM
 std::tm read_tm_string(const std::string& time_string, const double GMT_time);
 
 // modifies str to the string from lastpos to delim. Updates lastpos to the character after delim
@@ -62,8 +66,8 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
 // start_time_str and end_time_str must be in the form mm/dd/yy-hh:mm:ss.
 // Modifies the vector v into weather data retrieved
 int get_weather_data(std::vector<WeatherData>& v,
-                     const double latitude,
-                     const double longitude,
+                     const long double latitude,
+                     const long double longitude,
                      const std::string& start_time_str,
                      const std::string& end_time_str,
                      const std::string& database_path = DATABASE_DB);

@@ -13,8 +13,9 @@
 
 namespace MBC
 {
-bool operator<(const std::tm& lhs, const std::tm& rhs);
-bool operator==(const std::tm& lhs, const std::tm& rhs);
+bool operator<(std::tm& lhs, std::tm& rhs);
+bool operator==(std::tm& lhs, std::tm& rhs);
+bool operator<=(std::tm& lhs, std::tm& rhs);
 
 // file path to database.db
 static const std::string DATABASE_DB = std::string(mbc_source_dir) + "/data/mbc_database.db";
@@ -26,6 +27,9 @@ std::tm read_tm_format(const std::string& time_string, const double GMT_time);
 
 // read AM and PM
 std::tm read_tm_string(const std::string& time_string, const double GMT_time);
+
+// get string in the form mm/dd/yy-hh:mm:ss
+std::string tm_to_string(std::tm tm);
 
 // modifies str to the string from lastpos to delim. Updates lastpos to the character after delim
 void get_string(std::string& str, const std::string& source, 

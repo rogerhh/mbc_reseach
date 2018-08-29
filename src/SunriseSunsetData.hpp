@@ -6,6 +6,7 @@
 
 namespace MBC
 {
+bool operator<(const std::tm& lhs, const std::tm& rhs);
 
 class SunriseSunsetData
 {
@@ -19,6 +20,9 @@ public:
     long double latitude;
     long double longitude;
 
+    static const int SIZE_OF_FIELD_NAMES = 2;
+    static const char* FIELD_NAMES[];
+
     SunriseSunsetData();
 
     // date_in must be of the form mm/dd/yy
@@ -27,6 +31,14 @@ public:
                       const long double longitude_in,
                       const std::time_t sunrise_in,
                       const std::time_t sunset_in);
+
+    struct less
+    {
+        bool operator()(const SunriseSunsetData& lhs, const SunriseSunsetData& rhs)
+        {
+            return lhs.date < rhs.date;
+        }
+    };
 };
 
 } // namespace MBC

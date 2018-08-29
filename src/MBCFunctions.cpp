@@ -28,6 +28,11 @@ bool operator==(std::tm& lhs, std::tm& rhs)
     return lhs_time == rhs_time;
 }
 
+bool operator<=(std::tm& lhs, std::tm& rhs)
+{
+    return (lhs < rhs) || (lhs == rhs);
+}
+
 void replace_string(std::string& str,
                     const std::string& from,
                     const std::string& to)
@@ -772,7 +777,6 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     // create table if not exist
     std::string table_name = "SUNRISE_SUNSET_DATA";
     std::string sql = "CREATE TABLE IF NOT EXISTS " + table_name + " (" \
-                      "DATE TEXT NOT NULL," \
                       "LATITUDE REAL NOT NULL," \
                       "LONGITUDE REAL NOT NULL," \
                       "SUNRISE_TIME INT NOT NULL," \
@@ -793,7 +797,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     sql = "SELECT * FROM SUNRISE_SUNSET_DATA WHERE DATE = \"" + date  + "\" AND " \
           "LATITUDE = " + std::to_string(latitude) + " AND " \
           "LONGITUDE = " + std::to_string(longitude) + ";";
-    
+
     struct Handler
     {
         SunriseSunsetData data;

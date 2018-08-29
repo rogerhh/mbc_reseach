@@ -4,6 +4,8 @@
 
 namespace MBC
 {
+const char* SunriseSunsetData::FIELD_NAMES[] = {"sunrise_time",
+                                                "sunset_time"};
 
 SunriseSunsetData::SunriseSunsetData()
 : latitude(0), longitude(0)
@@ -27,8 +29,6 @@ SunriseSunsetData::SunriseSunsetData(const std::string& date_in,
     date.tm_year = tm.tm_year;
     date.tm_mon = tm.tm_mon;
     date.tm_mday = tm.tm_mday;
-    sunrise_time = 0;
-    sunset_time = 0;
 }
 
 } // namespace MBC

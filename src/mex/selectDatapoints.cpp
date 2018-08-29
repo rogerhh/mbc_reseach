@@ -26,13 +26,13 @@ void stringtoupper(char* ptr)
 
 void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[])
 {
-    std::string constraint_str, datatype;
-    int data_index;
     if(nrhs != 1)
     {
         throw std::runtime_error("Usage: selectDatapoints(constraint)\n");
     }
 
+    std::string constraint_str, datatype;
+    int data_index;
     char cstr[2048];
     if(mxGetString(prhs[0], cstr, 2048))
     {
@@ -48,7 +48,6 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     // use mxCreateStructMatrix to create a 1*n(i) array of DataPoint's
     // then use mxCreateCellArray to create a m*1 array of struct matrices
     
-    const char** fieldnames = DataPoint::FIELD_NAMES;
     mxArray* cellarr = mxCreateCellMatrix(matrix.size(), 1);
 
     for(int i = 0; i < matrix.size(); i++)
@@ -72,36 +71,6 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     }
 
     plhs[0] = cellarr;
-
-/*
-    if(matrix.size() != 0)
-    {
-        plhs[0] = mxCreateDoubleMatrix(matrix.size(), matrix[0].size(), mxREAL);
-        plhs[1] = mxCreateDoubleMatrix(matrix.size(), matrix[0].size(), mxREAL);
-        plhs[2] = mxCreateDoubleMatrix(matrix.size(), 1, mxREAL);
-        double* indices = mxGetPr(plhs[0]);
-        double* time_index = mxGetPr(plhs[1]);
-        double* serial_index = mxGetPr(plhs[2]);
-        for(int i = 0; i < matrix.size(); i++)
-        {
-            std::sort(matrix[i].begin(), matrix[i].end(), DataPoint::less());
-            for(int j = 0; j < matrix[0].size(); j++)
-            {
-                indices[i + matrix.size() * j] = matrix[i][j].data[DataPoint::LIGHT_INTENSITY];
-                time_index[i + matrix.size() * j] = matrix[i][j].time;
-                std::cout << matrix[i][j].serial_num << " " << matrix[i][j].time << " " << matrix[i][j].data[DataPoint::LATITUDE] << " " << matrix[i][j].data[DataPoint::LONGITUDE] << " " << matrix[i][j].data[DataPoint::LIGHT_INTENSITY] << "\n";
-            }
-            serial_index[i] = serial_v[i];
-        }
-    }
-*/
-
-/*
-    else
-    {
-        std::cout << "No datapoint selected.\n";
-    }
-*/
 
     return;
 }

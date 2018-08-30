@@ -26,10 +26,10 @@ std::time_t read_time_format(const std::string& time_string, const double GMT_ti
 std::tm read_tm_format(const std::string& time_string, const double GMT_time);
 
 // read AM and PM
-std::tm read_tm_string(const std::string& time_string, const double GMT_time);
+// std::tm read_tm_string(const std::string& time_string, const double GMT_time);
 
 // get string in the form mm/dd/yy-hh:mm:ss
-std::string tm_to_string(std::tm tm);
+// std::string tm_to_string(std::tm tm);
 
 // modifies str to the string from lastpos to delim. Updates lastpos to the character after delim
 void get_string(std::string& str, const std::string& source, 

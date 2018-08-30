@@ -45,6 +45,13 @@ void replace_string(std::string& str,
     return;
 }
 
+// reset std::tm object to in-range values
+// return 1 on success and 0 otherwise
+bool reset_tm(std::tm* tm)
+{
+    return std::mktime(tm) != -1;
+}
+
 std::time_t read_time_format(const std::string& time_string, const double GMT_time)
 {
     int hr_shift = floor(GMT_time);
@@ -111,6 +118,7 @@ std::tm read_tm_string(const std::string& time_string, const double GMT_time)
 }
 
 // get string in the form mm/dd/yy-hh:mm:ss
+/*
 std::string tm_to_string(std::tm tm)
 {
     char temp[64];
@@ -129,17 +137,20 @@ std::string tm_to_string(std::tm tm)
     sec = (sec.length() < 2)? "0" + sec : sec;
     return mon + "/" + day + "/" + yr + "-" + hr + ":" + min + ":" + sec;
 }
+*/
 
+// TODO: deprecate this. Use strftime instead
 // get string in the form yyyy-mm-dd
+/*
 std::string tm_to_full_string(std::tm tm)
 {
     char temp[64];
-    std::strftime(temp, sizeof(temp), "", &tm);
+    std::strftime(temp, sizeof(temp), "%Y-m", &tm);
     std::string yr, mon, day, hr, min, sec;
     yr = std::to_string(tm.tm_year + 1900);
     mon = std::to_string(tm.tm_mon + 1);
     mon = (mon.length() < 2)? "0" + mon : mon;
-    day = std::to_string(tm.tm_mday);
+    // day = std::to_string(tm.tm_mday);
     day = (day.length() < 2)? "0" + day : day;
     hr = std::to_string(tm.tm_hour);
     hr = (hr.length() < 2)? "0" + hr : hr;
@@ -149,6 +160,7 @@ std::string tm_to_full_string(std::tm tm)
     sec = (sec.length() < 2)? "0" + sec : sec;
     return yr + "-" + mon + "-" + day;
 }
+*/
 
 void get_string(std::string& str, const std::string& source, 
                 const std::string& delim, int& lastpos)
@@ -619,15 +631,15 @@ int get_weather_data(std::vector<WeatherData>& v,
     end_time_tm.tm_sec = 0;
 
     std::vector<std::tm> new_dates;
-    std::cout << "debug: 1\n";
 
     // gets all the dates that are not in the database into new_dates
     // directly comparing seconds after epoch for safety reasons
     while(start_time_tm < end_time_tm)
     {
-        std::string date_str = tm_to_string(start_time_tm).substr(0, 8);
+        char date_str[16];
+        std::strftime(date_str, sizeof(date_str), "%Y-%m-%d", &start_time_tm);
         sql = "SELECT * FROM " + dates_table_name + " WHERE DATE = " + date_str;
-        std::cout << "debug: sql = " << sql << "\n";
+        // std::cout << "debug: sql = " << sql << "\n";
 
         struct Handler
         {
@@ -666,10 +678,7 @@ int get_weather_data(std::vector<WeatherData>& v,
         }
 
         start_time_tm.tm_mday++;
-
-        // standardize start_time_tm
-        char temp[64];
-        std::strftime(temp, sizeof(temp), "", &start_time_tm);
+        reset_tm(&start_time_tm);
     }
 
     struct memory_t
@@ -685,7 +694,6 @@ int get_weather_data(std::vector<WeatherData>& v,
 
         ~memory_t()
         {
-            std::cout << "destructor called\n";
             free(contents);
         }
 
@@ -703,7 +711,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                 return 0;
             }
             memcpy(userptr->contents + userptr->size, retrieved_data, real_size);
-            userptr->size = real_size;
+            userptr->size += real_size;
             userptr->contents[userptr->size] = '\0';
             return real_size;
         }
@@ -714,29 +722,34 @@ int get_weather_data(std::vector<WeatherData>& v,
     curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
 
-    std::cout << "debug: 0\n";
-
     if(curl)
     {
         std::tm last_end_date_tm = new_dates[0];
+        std::tm new_start_date_tm = new_dates[0];
         for(auto& new_start_date_tm : new_dates)
         {
+            // get seven days of data from web, saved in data.contents
+            memory_t data;
             if(new_start_date_tm < last_end_date_tm)
             {
                 continue;
             }
             last_end_date_tm = new_start_date_tm;
             last_end_date_tm.tm_mday += 7;
-            std::string new_start_date_str = tm_to_full_string(new_start_date_tm);
-            std::string last_end_date_str = tm_to_full_string(last_end_date_tm);
+            // last_end_date_tm.tm_mday += 2;
+            reset_tm(&last_end_date_tm);
+
+            char new_start_date_str[64], last_end_date_str[64];
+            std::strftime(new_start_date_str, 64, "%Y-%m-%d", &new_start_date_tm);
+            std::strftime(last_end_date_str, 64, "%Y-%m-%d", &last_end_date_tm); 
+            // tm_to_full_string(new_start_date_tm);
             std::string url = "https://api.weatherbit.io/v2.0/history/hourly" \
                               "?lat=" + std::to_string(latitude) +
                               "&lon=" + std::to_string(longitude) +
-                              "&start_date=" + new_start_date_str +
-                              "&end_date=" + last_end_date_str +
+                              "&start_date=" + std::string(new_start_date_str) +
+                              "&end_date=" + std::string(last_end_date_str) +
                               "&key=" + std::string(weatherbit_api_key);
-            std::cout << "debug: " << url << "\n";
-            memory_t data;
+            std::cout << "url = " << url << "\n";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_t::write_callback);
@@ -747,7 +760,17 @@ int get_weather_data(std::vector<WeatherData>& v,
             {
                 std::cout << "Error: " << curl_easy_strerror(res) << "\n";
             }
-            std::cout << "debug: contents = " << data.contents << "\n";
+            // std::cout << "debug: contents = " << data.contents << std::flush << "\n" << data.size << "\n" << std::flush;
+            std::cout << data.size << "\n";
+            char* ptr = data.contents;
+            while(*ptr)
+            {
+                std::cout << *ptr << std::flush;
+                ptr++;
+            }
+            std::cout << "\n";
+
+
         }
     }
 

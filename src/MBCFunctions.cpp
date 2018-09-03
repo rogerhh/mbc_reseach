@@ -632,6 +632,7 @@ int get_weather_data(std::vector<WeatherData>& v,
 
     std::vector<std::tm> new_dates;
 
+    // TODO: change this into a year-week key to minimize overlap
     // gets all the dates that are not in the database into new_dates
     // directly comparing seconds after epoch for safety reasons
     while(start_time_tm < end_time_tm)

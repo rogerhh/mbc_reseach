@@ -21,6 +21,15 @@ WeatherData::WeatherData(const std::time_t time_in, const double latitude, const
     data[LONGITUDE] = longitude;
 }
 
+const char* FIELD_NAMES[] = {"time",
+                             "latitude",
+                             "longitude",
+                             "pressure",
+"sea_level_pressure",
+"wind_speed",
+"wind_direction",
+"temperature"};
+
 std::ostream& operator<<(std::ostream& os, WeatherData& weatherdata)
 {
     os << weatherdata.time;

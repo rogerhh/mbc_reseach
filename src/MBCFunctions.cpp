@@ -495,6 +495,7 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
         std::stringstream ss;
         ss << "Error connecting to sqlite database: " << database_path;
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -576,8 +577,11 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
         std::string err_str = std::string(err_msg);
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
+
+    sqlite3_close(db);
     return handler.m_size;
 }
 
@@ -604,6 +608,7 @@ int get_weather_data(std::vector<WeatherData>& v,
         std::stringstream ss;
         ss << "Error connecting to sqlite database: " << database_path;
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -619,6 +624,7 @@ int get_weather_data(std::vector<WeatherData>& v,
     {
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
 
@@ -670,6 +676,7 @@ int get_weather_data(std::vector<WeatherData>& v,
             std::string err_str = std::string(err_msg);
             std::runtime_error e(err_msg);
             sqlite3_free(err_msg);
+            sqlite3_close(db);
             throw e;
         }
 
@@ -774,6 +781,7 @@ int get_weather_data(std::vector<WeatherData>& v,
             std::cout << "\n";
 
             // parse response
+            std::vector<WeatherData> weather_v;
             int lastpos = 0;
             std::string str, source = std::string(data.contents);
             get_string(str, source, "\"data\":[", lastpos);
@@ -865,6 +873,13 @@ int get_weather_data(std::vector<WeatherData>& v,
                         = (str != "null")? std::stod(str) : -1000;
                 }
 
+                if(get_string(str, source, "\"code\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::WEATHER_CODE]
+                        = (str != "null")? std::stoi(str) : -1000;
+                }
+
                 if(get_string(str, source, "\"ghi\":", lastpos))
                 {
                     get_string(str, source, ",", lastpos);
@@ -920,12 +935,93 @@ int get_weather_data(std::vector<WeatherData>& v,
                     weatherdata.data[WeatherData::SOLAR_AZIMUTH_ANGLE]
                         = (str != "null")? std::stold(str) : -1000;
                 }
+
+                weather_v.emplace_back(weatherdata);
+            }
+
+            // store new weather data into database
+            std::string weather_table_name = "WEATHER_DATA";
+            sql = "CREATE TABLE IF NOT EXISTS " + weather_table_name + " (" \
+                  "SECONDS_AFTER_EPOCH INT NOT NULL,"   \
+                  "LATITUDE REAL NOT NULL,"     \
+                  "LONGITUDE REAL NOT NULL,"    \
+                  "PRESSURE REAL,"  \
+                  "SEA_LEVEL_PRESSURE REAL,"    \
+                  "WIND_SPEED REAL,"    \
+                  "WIND_DIRECTION REAL,"    \
+                  "TEMPERATURE REAL,"   \
+                  "RELATIVE_HUMIDITY REAL,"     \
+                  "DEW_POINT REAL," \
+                  "CLOUD_COVERAGE REAL,"    \
+                  "PART_OF_THE_DAY BOOL,"    \
+                  "WEATHER_CODE INT,"   \
+                  "VISIBILITY REAL,"    \
+                  "PRECIPITATION REAL," \
+                  "SNOWFALL REAL,"  \
+                  "DHI REAL,"   \
+                  "DNI REAL,"   \
+                  "GHI REAL,"   \
+                  "UV_INDEX REAL,"  \
+                  "SOLAR_ELEVATION_ANGLE REAL," \
+                  "SOLAR_AZIMUTH_ANGLE REAL,"   \
+                  "SOLAR_HOUR_ANGLE REAL,"  \
+                  "PRIMARY KEY (SECONDS_AFTER_EPOCH, LATITUDE, LONGITUDE));";
+
+            rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+            if(rc != SQLITE_OK)
+            {
+                std::runtime_error e(err_msg);
+                sqlite3_free(err_msg);
+                sqlite3_close(db);
+                throw e;
+            }
+
+            // begin storing data
+            sql = "BEGIN TRANSACTION;";
+            
+            for(auto&i : weather_v)
+            {
+                get_insertion_string(sql, weather_table_name, 23,
+                                     std::to_string(i.time).c_str(),
+                                     std::to_string(i.data[WeatherData::LATITUDE]).c_str(),
+                                     std::to_string(i.data[WeatherData::LONGITUDE]).c_str(),
+                                     std::to_string(i.data[WeatherData::PRESSURE]).c_str(),
+                                     std::to_string(i.data[WeatherData::SEA_LEVEL_PRESSURE]).c_str(),
+                                     std::to_string(i.data[WeatherData::WIND_SPEED]).c_str(),
+                                     std::to_string(i.data[WeatherData::WIND_DIRECTION]).c_str(),
+                                     std::to_string(i.data[WeatherData::RELATIVE_HUMIDITY]).c_str(),
+                                     std::to_string(i.data[WeatherData::DEW_POINT]).c_str(),
+                                     std::to_string(i.data[WeatherData::CLOUD_COVERAGE]).c_str(),
+                                     std::to_string(i.data[WeatherData::PART_OF_THE_DAY]).c_str(),
+                                     std::to_string(i.data[WeatherData::WEATHER_CODE]).c_str(),
+                                     std::to_string(i.data[WeatherData::VISIBILITY]).c_str(),
+                                     std::to_string(i.data[WeatherData::PRECIPITATION]).c_str(),
+                                     std::to_string(i.data[WeatherData::SNOWFALL]).c_str(),
+                                     std::to_string(i.data[WeatherData::DHI]).c_str(),
+                                     std::to_string(i.data[WeatherData::DNI]).c_str(),
+                                     std::to_string(i.data[WeatherData::GHI]).c_str(),
+                                     std::to_string(i.data[WeatherData::UV_INDEX]).c_str(),
+                                     std::to_string(i.data[WeatherData::SOLAR_ELEVATION_ANGLE]).c_str(),
+                                     std::to_string(i.data[WeatherData::SOLAR_AZIMUTH_ANGLE]).c_str(),
+                                     std::to_string(i.data[WeatherData::SOLAR_HOUR_ANGLE]).c_str());
+            }
+
+            rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+            if(rc != SQLITE_OK)
+            {
+                std::runtime_error e(err_msg);
+                sqlite3_free(err_msg);
+                sqlite3_close(db);
+                throw e;
             }
         }
     }
 
     curl_global_cleanup();
 
+    sqlite3_close(db);
     return 0;
 }
 

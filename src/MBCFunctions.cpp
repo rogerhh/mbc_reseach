@@ -117,8 +117,8 @@ std::tm read_tm_string(const std::string& time_string, const double GMT_time)
     return tm;
 }
 
+// TODO: deprecate this
 // get string in the form mm/dd/yy-hh:mm:ss
-/*
 std::string tm_to_string(std::tm tm)
 {
     char temp[64];
@@ -137,7 +137,6 @@ std::string tm_to_string(std::tm tm)
     sec = (sec.length() < 2)? "0" + sec : sec;
     return mon + "/" + day + "/" + yr + "-" + hr + ":" + min + ":" + sec;
 }
-*/
 
 // TODO: deprecate this. Use strftime instead
 // get string in the form yyyy-mm-dd
@@ -162,14 +161,18 @@ std::string tm_to_full_string(std::tm tm)
 }
 */
 
-void get_string(std::string& str, const std::string& source, 
-                const std::string& delim, int& lastpos)
+int get_string(std::string& str, const std::string& source, 
+               const std::string& delim, int& lastpos)
 {
     int pos = source.find(delim, lastpos);
-    if(pos == std::string::npos) { return; }
+    if(pos == std::string::npos) 
+    { 
+        str = "";
+        return 0; 
+    }
     str = source.substr(lastpos, pos - lastpos);
     lastpos = pos + delim.length();
-    return;
+    return 1;
 }
 
 void get_insertion_string(std::string& ret_str,
@@ -182,7 +185,7 @@ void get_insertion_string(std::string& ret_str,
     for(int i = 0; i < n; i++)
     {
         if(i != 0) { ret_str = ret_str + ","; }
-        ret_str = ret_str + va_arg(vl, std::string);
+        ret_str = ret_str + std::string(va_arg(vl, char*));
     }
     ret_str = ret_str + ");";
     va_end(vl);
@@ -381,12 +384,12 @@ int add_file_to_sqlite(const std::string& path,
             }
             std::string sql;
             get_insertion_string(sql, table_name, 6, 
-                                 SN,
-                                 std::to_string(tm_seconds_since_epoch),
-                                 std::to_string(latitude),
-                                 std::to_string(longitude),
-                                 light_data,
-                                 temp_data);
+                                 SN.c_str(),
+                                 std::to_string(tm_seconds_since_epoch).c_str(),
+                                 std::to_string(latitude).c_str(),
+                                 std::to_string(longitude).c_str(),
+                                 light_data.c_str(),
+                                 temp_data.c_str());
 
             //std::cout << sql << "\n" << std::flush;
             rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
@@ -589,7 +592,6 @@ int get_weather_data(std::vector<WeatherData>& v,
     std::time_t start_time = read_time_format(start_time_str, 0);
     std::time_t end_time = read_time_format(end_time_str, 0);
 
-    //  TODO: resize vector to exactly the number of hours between start_time and end_time
     // clear return vector
     v.clear();
     v.shrink_to_fit();
@@ -771,7 +773,154 @@ int get_weather_data(std::vector<WeatherData>& v,
             }
             std::cout << "\n";
 
+            // parse response
+            int lastpos = 0;
+            std::string str, source = std::string(data.contents);
+            get_string(str, source, "\"data\":[", lastpos);
 
+            while(get_string(str, source, "{", lastpos))
+            {
+                WeatherData weatherdata;
+                if(get_string(str, source, "\"rh\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::RELATIVE_HUMIDITY]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"wind_spd\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::WIND_SPEED]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"slp\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SEA_LEVEL_PRESSURE]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"vis\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::VISIBILITY]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"pod\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SEA_LEVEL_PRESSURE]
+                        = (str == "d")? 1 : 0;
+                }
+
+                if(get_string(str, source, "\"pres\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::PRESSURE]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"h_angle\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SOLAR_HOUR_ANGLE]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"dewpt\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::DEW_POINT]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"snow\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SNOWFALL]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"uv\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::UV_INDEX]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"elev_angle\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SOLAR_ELEVATION_ANGLE]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"wind_dir\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::WIND_DIRECTION]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"ghi\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::GHI]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"dhi\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::DHI]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"dni\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::DNI]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"azimuth\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SOLAR_AZIMUTH_ANGLE]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"temp\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::TEMPERATURE]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"precip\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::PRECIPITATION]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"clouds\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::CLOUD_COVERAGE]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"ts\":", lastpos))
+                {
+                    get_string(str, source, "}", lastpos);
+                    weatherdata.data[WeatherData::SOLAR_AZIMUTH_ANGLE]
+                        = (str != "null")? std::stold(str) : -1000;
+                }
+            }
         }
     }
 
@@ -956,11 +1105,11 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     std::cout << "debug: sunrise = " << sunrise_time << " sunset = " << sunset_time << "\n";
 
     get_insertion_string(sql, table_name, 5,
-                         "\"" + date + "\"",
-                         std::to_string(latitude),
-                         std::to_string(longitude),
-                         std::to_string(sunrise_time),
-                         std::to_string(sunset_time));
+                         ("\"" + date + "\"").c_str(),
+                         std::to_string(latitude).c_str(),
+                         std::to_string(longitude).c_str(),
+                         std::to_string(sunrise_time).c_str(),
+                         std::to_string(sunset_time).c_str());
 
     std::cout << "debug: sql = " << sql << "\n";
 

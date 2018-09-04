@@ -28,12 +28,14 @@ std::tm read_tm_format(const std::string& time_string, const double GMT_time);
 // read AM and PM
 std::tm read_tm_string(const std::string& time_string, const double GMT_time);
 
+// TODO: deprecate this
 // get string in the form mm/dd/yy-hh:mm:ss
-// std::string tm_to_string(std::tm tm);
+std::string tm_to_string(std::tm tm);
 
-// modifies str to the string from lastpos to delim. Updates lastpos to the character after delim
-void get_string(std::string& str, const std::string& source, 
-                const std::string& delim, int& lastpos);
+// modifies str to the string from lastpos to delim. If delim is not found in source, clear str. Updates lastpos to the character after delim
+// return 1 on success and 0 if delim is not found in source
+int get_string(std::string& str, const std::string& source, 
+               const std::string& delim, int& lastpos);
 
 // wrapper function to get insert query string
 void get_insertion_string(std::string& ret_str, 
@@ -76,6 +78,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                      const std::string& end_time_str,
                      const std::string& database_path = DATABASE_DB);
 
+// TODO: change to yyyy-mm-dd
 // gets sunrise-sunset times of a day at a particular location
 // date must be in the form mm/dd/yy
 // Returns a SunriseSunsetData object

@@ -771,14 +771,6 @@ int get_weather_data(std::vector<WeatherData>& v,
                 std::cout << "Error: " << curl_easy_strerror(res) << "\n";
             }
             // std::cout << "debug: contents = " << data.contents << std::flush << "\n" << data.size << "\n" << std::flush;
-            std::cout << data.size << "\n";
-            char* ptr = data.contents;
-            while(*ptr)
-            {
-                std::cout << *ptr << std::flush;
-                ptr++;
-            }
-            std::cout << "\n";
 
             // parse response
             std::vector<WeatherData> weather_v;
@@ -932,9 +924,12 @@ int get_weather_data(std::vector<WeatherData>& v,
                 if(get_string(str, source, "\"ts\":", lastpos))
                 {
                     get_string(str, source, "}", lastpos);
-                    weatherdata.data[WeatherData::SOLAR_AZIMUTH_ANGLE]
+                    weatherdata.time
                         = (str != "null")? std::stold(str) : -1000;
                 }
+
+                weatherdata.data[WeatherData::LATITUDE] = latitude;
+                weatherdata.data[WeatherData::LONGITUDE] = longitude;
 
                 weather_v.emplace_back(weatherdata);
             }
@@ -979,6 +974,7 @@ int get_weather_data(std::vector<WeatherData>& v,
 
             // begin storing data
             sql = "BEGIN TRANSACTION;";
+            rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
             
             for(auto&i : weather_v)
             {
@@ -990,6 +986,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                                      std::to_string(i.data[WeatherData::SEA_LEVEL_PRESSURE]).c_str(),
                                      std::to_string(i.data[WeatherData::WIND_SPEED]).c_str(),
                                      std::to_string(i.data[WeatherData::WIND_DIRECTION]).c_str(),
+                                     std::to_string(i.data[WeatherData::TEMPERATURE]).c_str(),
                                      std::to_string(i.data[WeatherData::RELATIVE_HUMIDITY]).c_str(),
                                      std::to_string(i.data[WeatherData::DEW_POINT]).c_str(),
                                      std::to_string(i.data[WeatherData::CLOUD_COVERAGE]).c_str(),
@@ -1005,8 +1002,11 @@ int get_weather_data(std::vector<WeatherData>& v,
                                      std::to_string(i.data[WeatherData::SOLAR_ELEVATION_ANGLE]).c_str(),
                                      std::to_string(i.data[WeatherData::SOLAR_AZIMUTH_ANGLE]).c_str(),
                                      std::to_string(i.data[WeatherData::SOLAR_HOUR_ANGLE]).c_str());
+                std::cout << sql << "\n";
+                rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
             }
 
+            sql = "COMMIT TRANSACTION;";
             rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
 
             if(rc != SQLITE_OK)

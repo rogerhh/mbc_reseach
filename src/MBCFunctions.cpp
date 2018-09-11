@@ -614,7 +614,10 @@ int get_weather_data(std::vector<WeatherData>& v,
 
     std::string dates_table_name = "WEATHER_DATA_DATES";
     std::string sql = "CREATE TABLE IF NOT EXISTS " + dates_table_name + " (" \
-                      "DATE TEXT NOT NULL);";
+                      "DATE TEXT NOT NULL," \
+                      "LATITUDE REAL NOT NULL," \
+                      "LONGITUDE REAL NOT NULL," \
+                      "PRIMARY KEY (DATE, LATITUDE, LONGITUDE));";
 
     char* err_msg = nullptr;
 
@@ -647,7 +650,9 @@ int get_weather_data(std::vector<WeatherData>& v,
     {
         char date_str[16];
         std::strftime(date_str, sizeof(date_str), "%Y-%m-%d", &start_time_tm);
-        sql = "SELECT * FROM " + dates_table_name + " WHERE DATE = " + date_str;
+        sql = "SELECT * FROM " + dates_table_name + " WHERE DATE = " + date_str +
+              " AND LATITUDE = " + std::to_string(latitude) +
+              " AND LONGITUDE = " + std::to_string(longitude) + ";";
         // std::cout << "debug: sql = " << sql << "\n";
 
         struct Handler
@@ -727,6 +732,44 @@ int get_weather_data(std::vector<WeatherData>& v,
         }
     };
 
+    // store new weather data into database
+    std::string weather_table_name = "WEATHER_DATA";
+    sql = "CREATE TABLE IF NOT EXISTS " + weather_table_name + " (" \
+          "SECONDS_AFTER_EPOCH INT NOT NULL,"   \
+          "LATITUDE REAL NOT NULL,"     \
+          "LONGITUDE REAL NOT NULL,"    \
+          "PRESSURE REAL,"  \
+          "SEA_LEVEL_PRESSURE REAL,"    \
+          "WIND_SPEED REAL,"    \
+          "WIND_DIRECTION REAL,"    \
+          "TEMPERATURE REAL,"   \
+          "RELATIVE_HUMIDITY REAL,"     \
+          "DEW_POINT REAL," \
+          "CLOUD_COVERAGE REAL,"    \
+          "PART_OF_THE_DAY BOOL,"    \
+          "WEATHER_CODE INT,"   \
+          "VISIBILITY REAL,"    \
+          "PRECIPITATION REAL," \
+          "SNOWFALL REAL,"  \
+          "DHI REAL,"   \
+          "DNI REAL,"   \
+          "GHI REAL,"   \
+          "UV_INDEX REAL,"  \
+          "SOLAR_ELEVATION_ANGLE REAL," \
+          "SOLAR_AZIMUTH_ANGLE REAL,"   \
+          "SOLAR_HOUR_ANGLE REAL,"  \
+          "PRIMARY KEY (SECONDS_AFTER_EPOCH, LATITUDE, LONGITUDE));";
+
+    rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+    if(rc != SQLITE_OK)
+    {
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+        throw e;
+    }
+
     CURL* curl;
     CURLcode res;
     curl_global_init(CURL_GLOBAL_DEFAULT);
@@ -758,6 +801,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                               "&lon=" + std::to_string(longitude) +
                               "&start_date=" + std::string(new_start_date_str) +
                               "&end_date=" + std::string(last_end_date_str) +
+                              "&tz=utc" +
                               "&key=" + std::string(weatherbit_api_key);
             std::cout << "url = " << url << "\n";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
@@ -812,8 +856,8 @@ int get_weather_data(std::vector<WeatherData>& v,
                 if(get_string(str, source, "\"pod\":", lastpos))
                 {
                     get_string(str, source, ",", lastpos);
-                    weatherdata.data[WeatherData::SEA_LEVEL_PRESSURE]
-                        = (str == "d")? 1 : 0;
+                    weatherdata.data[WeatherData::PART_OF_THE_DAY]
+                        = (str == "\"d\"")? 1 : 0;
                 }
 
                 if(get_string(str, source, "\"pres\":", lastpos))
@@ -934,44 +978,6 @@ int get_weather_data(std::vector<WeatherData>& v,
                 weather_v.emplace_back(weatherdata);
             }
 
-            // store new weather data into database
-            std::string weather_table_name = "WEATHER_DATA";
-            sql = "CREATE TABLE IF NOT EXISTS " + weather_table_name + " (" \
-                  "SECONDS_AFTER_EPOCH INT NOT NULL,"   \
-                  "LATITUDE REAL NOT NULL,"     \
-                  "LONGITUDE REAL NOT NULL,"    \
-                  "PRESSURE REAL,"  \
-                  "SEA_LEVEL_PRESSURE REAL,"    \
-                  "WIND_SPEED REAL,"    \
-                  "WIND_DIRECTION REAL,"    \
-                  "TEMPERATURE REAL,"   \
-                  "RELATIVE_HUMIDITY REAL,"     \
-                  "DEW_POINT REAL," \
-                  "CLOUD_COVERAGE REAL,"    \
-                  "PART_OF_THE_DAY BOOL,"    \
-                  "WEATHER_CODE INT,"   \
-                  "VISIBILITY REAL,"    \
-                  "PRECIPITATION REAL," \
-                  "SNOWFALL REAL,"  \
-                  "DHI REAL,"   \
-                  "DNI REAL,"   \
-                  "GHI REAL,"   \
-                  "UV_INDEX REAL,"  \
-                  "SOLAR_ELEVATION_ANGLE REAL," \
-                  "SOLAR_AZIMUTH_ANGLE REAL,"   \
-                  "SOLAR_HOUR_ANGLE REAL,"  \
-                  "PRIMARY KEY (SECONDS_AFTER_EPOCH, LATITUDE, LONGITUDE));";
-
-            rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
-
-            if(rc != SQLITE_OK)
-            {
-                std::runtime_error e(err_msg);
-                sqlite3_free(err_msg);
-                sqlite3_close(db);
-                throw e;
-            }
-
             // begin storing data
             sql = "BEGIN TRANSACTION;";
             rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
@@ -1002,7 +1008,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                                      std::to_string(i.data[WeatherData::SOLAR_ELEVATION_ANGLE]).c_str(),
                                      std::to_string(i.data[WeatherData::SOLAR_AZIMUTH_ANGLE]).c_str(),
                                      std::to_string(i.data[WeatherData::SOLAR_HOUR_ANGLE]).c_str());
-                std::cout << sql << "\n";
+                // std::cout << sql << "\n";
                 rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
             }
 
@@ -1021,8 +1027,50 @@ int get_weather_data(std::vector<WeatherData>& v,
 
     curl_global_cleanup();
 
+    struct Handler_1
+    {
+        std::vector<WeatherData>* weatherdata_v;
+
+        static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
+        {
+            std::vector<WeatherData>& v = *(((Handler_1*) handler_ptr)->weatherdata_v);
+            WeatherData weatherdata;
+            weatherdata.time = (std::time_t) std::atoll(row_val[0]);
+            for(int i = 0; i < WeatherData::SIZE_OF_DATA_FIELDS; i++)
+            {
+                weatherdata.data[i] 
+                    = (row_val[i + 1] != nullptr)? std::stold(std::string(row_val[i + 1])) 
+                                                    : -1000;
+            }
+            v.emplace_back(weatherdata);
+            return 0;
+        }
+    };
+
+    Handler_1 handler_1;
+    handler_1.weatherdata_v = &v;
+
+    sql = "SELECT * FROM " + weather_table_name + 
+          " WHERE SECONDS_AFTER_EPOCH >= " + std::to_string(start_time) +
+          " AND SECONDS_AFTER_EPOCH < " + std::to_string(end_time) + ";";
+    std::cout << sql << "\n";
+
+    rc = sqlite3_exec(db, sql.c_str(), Handler_1::callback, &handler_1, &err_msg);
+    std::cout << v.size() << "\n";
+
+    if(rc != SQLITE_OK)
+    {
+        std::string err_str = std::string(err_msg);
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+        throw e;
+    }
+
     sqlite3_close(db);
-    return 0;
+
+
+    return v.size();
 }
 
 // TODO: change everything to long double

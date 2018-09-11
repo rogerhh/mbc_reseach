@@ -21,14 +21,29 @@ WeatherData::WeatherData(const std::time_t time_in, const double latitude, const
     data[LONGITUDE] = longitude;
 }
 
-const char* FIELD_NAMES[] = {"time",
+const char* WeatherData::FIELD_NAMES[] = {"time",
                              "latitude",
                              "longitude",
                              "pressure",
-"sea_level_pressure",
-"wind_speed",
-"wind_direction",
-"temperature"};
+                             "sea_level_pressure",
+                             "wind_speed",
+                             "wind_direction",
+                             "temperature",
+                             "relative_humidity",
+                             "dew_point",
+                             "cloud_coverage",
+                             "part_of_the_day",
+                             "weather_code",
+                             "visibility",
+                             "precipitation",
+                             "snowfall",
+                             "dhi",
+                             "dni",
+                             "ghi",
+                             "uv_index",
+                             "solar_elevation_angle",
+                             "solar_azimuth_angle",
+                             "solar_hour_angle"};
 
 std::ostream& operator<<(std::ostream& os, WeatherData& weatherdata)
 {

@@ -11,6 +11,7 @@
 #include <time.h>
 #include <sqlite3.h>
 #include <curl/curl.h>
+#include <utility>
 
 namespace MBC
 {
@@ -585,6 +586,12 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
     return handler.m_size;
 }
 
+int get_week_of_year(std::tm* tm)
+{
+    reset_tm(tm);
+    return tm->tm_yday / 7;
+}
+
 
 int get_weather_data(std::vector<WeatherData>& v,
                      const long double latitude,
@@ -614,10 +621,11 @@ int get_weather_data(std::vector<WeatherData>& v,
 
     std::string dates_table_name = "WEATHER_DATA_DATES";
     std::string sql = "CREATE TABLE IF NOT EXISTS " + dates_table_name + " (" \
-                      "DATE TEXT NOT NULL," \
+                      "YEAR INT NOT NULL," \
+                      "WEEK INT NOT NULL," \
                       "LATITUDE REAL NOT NULL," \
                       "LONGITUDE REAL NOT NULL," \
-                      "PRIMARY KEY (DATE, LATITUDE, LONGITUDE));";
+                      "PRIMARY KEY (YEAR, WEEK, LATITUDE, LONGITUDE));";
 
     char* err_msg = nullptr;
 
@@ -636,21 +644,26 @@ int get_weather_data(std::vector<WeatherData>& v,
     start_time_tm.tm_min = 0;
     start_time_tm.tm_sec = 0;
 
+    reset_tm(&start_time_tm);
+    start_time_tm.tm_mday -= start_time_tm.tm_yday % 7;
+
     std::tm end_time_tm = read_tm_format(end_time_str, 0);
     end_time_tm.tm_hour = 0;
     end_time_tm.tm_min = 0;
     end_time_tm.tm_sec = 0;
 
-    std::vector<std::tm> new_dates;
+    // start of new weeks
+    std::vector<std::tm> new_weeks;
 
     // TODO: change this into a year-week key to minimize overlap
     // gets all the dates that are not in the database into new_dates
     // directly comparing seconds after epoch for safety reasons
     while(start_time_tm < end_time_tm)
     {
-        char date_str[16];
-        std::strftime(date_str, sizeof(date_str), "%Y-%m-%d", &start_time_tm);
-        sql = "SELECT * FROM " + dates_table_name + " WHERE DATE = " + date_str +
+        int week = get_week_of_year(&start_time_tm);
+        sql = "SELECT * FROM " + dates_table_name + 
+              " WHERE YEAR = " + std::to_string(start_time_tm.tm_year) +
+              " AND WEEK = " + std::to_string(week);
               " AND LATITUDE = " + std::to_string(latitude) +
               " AND LONGITUDE = " + std::to_string(longitude) + ";";
         // std::cout << "debug: sql = " << sql << "\n";
@@ -689,10 +702,10 @@ int get_weather_data(std::vector<WeatherData>& v,
         // add date to new_dates
         if(!handler.flag)
         {
-            new_dates.push_back(start_time_tm);
+            new_weeks.push_back(start_time_tm);
         }
 
-        start_time_tm.tm_mday++;
+        start_time_tm.tm_mday += 7;
         reset_tm(&start_time_tm);
     }
 
@@ -777,9 +790,14 @@ int get_weather_data(std::vector<WeatherData>& v,
 
     if(curl)
     {
-        std::tm last_end_date_tm = new_dates[0];
-        std::tm new_start_date_tm = new_dates[0];
-        for(auto& new_start_date_tm : new_dates)
+        std::tm last_end_date_tm;
+        std::tm new_start_date_tm;
+        if(!new_weeks.empty())
+        {
+            last_end_date_tm = new_weeks[0];
+            new_start_date_tm = new_weeks[0];
+        }
+        for(auto& new_start_date_tm : new_weeks)
         {
             // get seven days of data from web, saved in data.contents
             memory_t data;
@@ -1013,6 +1031,25 @@ int get_weather_data(std::vector<WeatherData>& v,
             }
 
             sql = "COMMIT TRANSACTION;";
+            rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+            if(rc != SQLITE_OK)
+            {
+                std::runtime_error e(err_msg);
+                sqlite3_free(err_msg);
+                sqlite3_close(db);
+                throw e;
+            }
+
+            int week = get_week_of_year(&new_start_date_tm);
+            
+            get_insertion_string(sql, dates_table_name, 4,
+                                 std::to_string(new_start_date_tm.tm_year).c_str(),
+                                 std::to_string(week).c_str(),
+                                 std::to_string(latitude).c_str(),
+                                 std::to_string(longitude).c_str());
+            std::cout << "sql = " << sql << "\n";
+
             rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
 
             if(rc != SQLITE_OK)

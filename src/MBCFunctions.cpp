@@ -603,6 +603,7 @@ int get_weather_data(std::vector<WeatherData>& v,
     std::time_t start_time = read_time_format(start_time_str, 0);
     std::time_t end_time = read_time_format(end_time_str, 0);
 
+    std::cout << latitude << " " << longitude << "\n";
     // clear return vector
     v.clear();
     v.shrink_to_fit();
@@ -663,10 +664,10 @@ int get_weather_data(std::vector<WeatherData>& v,
         int week = get_week_of_year(&start_time_tm);
         sql = "SELECT * FROM " + dates_table_name + 
               " WHERE YEAR = " + std::to_string(start_time_tm.tm_year) +
-              " AND WEEK = " + std::to_string(week);
+              " AND WEEK = " + std::to_string(week) + 
               " AND LATITUDE = " + std::to_string(latitude) +
               " AND LONGITUDE = " + std::to_string(longitude) + ";";
-        // std::cout << "debug: sql = " << sql << "\n";
+        std::cout << "debug: sql = " << sql << "\n";
 
         struct Handler
         {
@@ -679,6 +680,11 @@ int get_weather_data(std::vector<WeatherData>& v,
 
             static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
             {
+                for(int i = 0; i < col_num; i++)
+                {
+                    std::cout << row_val[i] << " ";
+                }
+                std::cout << "\n";
                 Handler* ptr = (Handler*) handler_ptr;
                 ptr->flag = true;
                 return 0;

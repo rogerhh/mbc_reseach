@@ -1095,7 +1095,9 @@ int get_weather_data(std::vector<WeatherData>& v,
 
     sql = "SELECT * FROM " + weather_table_name + 
           " WHERE SECONDS_AFTER_EPOCH >= " + std::to_string(start_time) +
-          " AND SECONDS_AFTER_EPOCH < " + std::to_string(end_time) + ";";
+          " AND SECONDS_AFTER_EPOCH < " + std::to_string(end_time) + 
+          " AND LATITUDE = " + std::to_string(latitude) +
+          " AND LONGITUDE = " + std::to_string(longitude) + ";";
     std::cout << sql << "\n";
 
     rc = sqlite3_exec(db, sql.c_str(), Handler_1::callback, &handler_1, &err_msg);

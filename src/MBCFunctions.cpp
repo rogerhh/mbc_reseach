@@ -12,6 +12,7 @@
 #include <sqlite3.h>
 #include <curl/curl.h>
 #include <utility>
+#include <cassert>
 
 namespace MBC
 {
@@ -114,6 +115,10 @@ std::tm read_tm_string(const std::string& time_string, const double GMT_time)
     get_string(sign, time_string, ",", lastpos);
     if(tm.tm_hour == 12 && sign == "AM") { tm.tm_hour = 0; }
     else if(tm.tm_hour != 12 && sign == "PM") { tm.tm_hour += 12; }
+    else
+    {
+        assert("AM PM not specified\n" && 0);
+    }
     tm.tm_hour -= GMT_time;
     return tm;
 }
@@ -1139,6 +1144,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     // create table if not exist
     std::string table_name = "SUNRISE_SUNSET_DATA";
     std::string sql = "CREATE TABLE IF NOT EXISTS " + table_name + " (" \
+                      "DATE STRING NOT NULL," \
                       "LATITUDE REAL NOT NULL," \
                       "LONGITUDE REAL NOT NULL," \
                       "SUNRISE_TIME INT NOT NULL," \
@@ -1273,14 +1279,14 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     int lastpos = 0;
     get_string(str, result, "\"sunrise\":\"", lastpos);
     get_string(str, result, "\"", lastpos);
-    str = date + "-" + str;
+    str = date + "-" + str + ",";
     std::cout << "debug: str = " << str << "\n";
     std::tm sunrise_tm = read_tm_string(str, 0);
     std::time_t sunrise_time = timegm(&sunrise_tm);
 
     get_string(str, result, "\"sunset\":\"", lastpos);
     get_string(str, result, "\"", lastpos);
-    str = date + "-" + str;
+    str = date + "-" + str + ",";
     std::cout << "debug: str = " << str << "\n";
     std::tm sunset_tm = read_tm_string(str, 0);
     std::time_t sunset_time = timegm(&sunset_tm);

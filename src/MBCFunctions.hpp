@@ -19,6 +19,8 @@ bool operator<=(std::tm& lhs, std::tm& rhs);
 
 // file path to database.db
 static const std::string DATABASE_DB = std::string(mbc_source_dir) + "/data/mbc_database.db";
+static const std::string VOLUNTEER_TABLE = std::string(mbc_source_dir) + "/data/volunteer_sensors.txt";
+static const std::string SENSOR_INFO_TABLE = std::string(mbc_source_dir) + "/data/sensor_info.csv"; 
 
 std::time_t read_time_format(const std::string& time_string, const double GMT_time);
 
@@ -87,7 +89,17 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
                                           const long double longitude,
                                           const std::string& database_path = DATABASE_DB);
 
+void sort_volunteer_data(const std::string& start_time_str,
+                         const std::string& end_time_str,
+                         const std::string& volunteer_table = VOLUNTEER_TABLE,
+                         const std::string& database_path = DATABASE_DB);
+
+void print_volunteer_data(const std::string& start_time_str,
+                          const std::string& end_time_str,
+                          const std::string& volunteer_table = VOLUNTEER_TABLE,
+                          const std::string& sensor_info_table = SENSOR_INFO_TABLE,
+                          const std::string& database_path = DATABASE_DB);
+
 } // namespace MBC
 
 #endif
-

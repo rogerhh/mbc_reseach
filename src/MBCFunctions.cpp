@@ -1321,4 +1321,280 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     return SunriseSunsetData(date, latitude, longitude, sunrise_time, sunset_time);
 }
 
+void sort_volunteer_data(const std::string& start_time_str,
+                         const std::string& end_time_str,
+                         const std::string& volunteer_table,
+                         const std::string& database_path)
+{
+    // connect with sqlite db
+    sqlite3* db;
+    int rc = sqlite3_open(database_path.c_str(), &db);
+    if(rc != SQLITE_OK)
+    {
+        std::stringstream ss;
+        ss << "Error connecting to sqlite database: " << database_path;
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    std::string info_table_name = "VOLUNTEER_SENSOR_INFO";
+
+    std::string sql = "CREATE TABLE IF NOT EXISTS " + info_table_name + " (" \
+                      "SN INT NOT NULL," \
+                      "YEAR INT NOT NULL," \
+                      "WEEK INT NOT NULL," \
+                      "RECEIVED BOOL," \
+                      "UPLOADED BOOL," \
+                      "LOST BOOL," \
+                      "PRIMARY KEY (SN, YEAR, WEEK))";
+
+    char* err_msg = nullptr;
+    rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
+
+    if(rc != SQLITE_OK)
+    {
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        throw e;
+    }
+
+    std::tm start_time_tm = read_tm_format(start_time_str, 0);
+    start_time_tm.tm_hour = 0;
+    start_time_tm.tm_min = 0;
+    start_time_tm.tm_sec = 0;
+
+    reset_tm(&start_time_tm);
+    start_time_tm.tm_mday -= start_time_tm.tm_yday % 7;
+
+    std::tm end_time_tm = read_tm_format(end_time_str, 0);
+    end_time_tm.tm_hour = 0;
+    end_time_tm.tm_min = 0;
+    end_time_tm.tm_sec = 0;
+
+    std::ifstream fin(volunteer_table);
+    if(!fin.is_open())
+    {
+        std::stringstream ss;
+        ss << "Error opening volunteer table: " << volunteer_table << "\n";
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    struct Handler
+    {
+        bool flag = false;
+        static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
+        {
+            Handler* handler = (Handler*) handler_ptr;
+            handler->flag = false;
+            if(atoi(row_val[0]) > 0)
+            {
+                handler->flag = true;
+            }
+            return 0;
+        }
+    };
+
+    int sn;
+    Handler handler;
+
+    std::string store_sql = "BEGIN TRANSACTION;";
+
+    while(fin >> sn)
+    {
+        std::tm temp_start = start_time_tm;
+        while(temp_start < end_time_tm)
+        {
+            std::tm temp_end = temp_start;
+            temp_end.tm_mday += 7;
+            temp_end.tm_sec -= 1;
+            reset_tm(&temp_end);
+            sql = "SELECT COUNT(*) FROM SENSOR_DATA WHERE" \
+                   " SN = " + std::to_string(sn) +
+                   " AND SECONDS_AFTER_EPOCH >= " + std::to_string(std::mktime(&temp_start)) + 
+                   " AND SECONDS_AFTER_EPOCH < " + std::to_string(std::mktime(&temp_end)) + ";";
+            std::cout << "debug: " << sql << "\n";
+
+            rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
+
+            if(rc != SQLITE_OK)
+            {
+                std::string err_str = std::string(err_msg);
+                std::runtime_error e(err_msg);
+                sqlite3_free(err_msg);
+                sqlite3_close(db);
+                throw e;
+            }
+
+            int week = get_week_of_year(&temp_start);
+            store_sql = store_sql + "INSERT OR IGNORE INTO " +
+                        info_table_name + " VALUES (" + 
+                        std::to_string(sn) + "," +
+                        std::to_string(temp_start.tm_year) + "," +
+                        std::to_string(week) +
+                        ",0,0,0);";
+
+            if(handler.flag)
+            {
+                store_sql = store_sql + "UPDATE " +
+                            info_table_name +
+                            " SET UPLOADED = 1" \
+                            " WHERE SN = " + std::to_string(sn) +
+                            " AND YEAR = " + std::to_string(temp_start.tm_year) +
+                            " AND WEEK = " + std::to_string(week) + ";";
+            }
+
+            temp_start = temp_end;
+            temp_start.tm_sec += 1;
+        }
+    }
+
+    store_sql = store_sql + "COMMIT TRANSACTION;";
+    rc = sqlite3_exec(db, store_sql.c_str(), Handler::callback, &handler, &err_msg);
+    std::cout << "debug: store_sql = " << store_sql << "\n";
+
+    if(rc != SQLITE_OK)
+    {
+        std::string err_str = std::string(err_msg);
+        std::runtime_error e(err_msg);
+        sqlite3_free(err_msg);
+        sqlite3_close(db);
+        throw e;
+    }
+
+}
+
+void print_volunteer_data(const std::string& start_time_str,
+                          const std::string& end_time_str,
+                          const std::string& volunteer_table,
+                          const std::string& sensor_info_table,
+                          const std::string& database_path)
+{
+    // connect with sqlite db
+    sqlite3* db;
+    int rc = sqlite3_open(database_path.c_str(), &db);
+    if(rc != SQLITE_OK)
+    {
+        std::stringstream ss;
+        ss << "Error connecting to sqlite database: " << database_path;
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    std::string info_table_name = "VOLUNTEER_SENSOR_INFO";
+
+    std::tm start_time_tm = read_tm_format(start_time_str, 0);
+    start_time_tm.tm_hour = 0;
+    start_time_tm.tm_min = 0;
+    start_time_tm.tm_sec = 0;
+
+    reset_tm(&start_time_tm);
+    start_time_tm.tm_mday -= start_time_tm.tm_yday % 7;
+
+    std::tm end_time_tm = read_tm_format(end_time_str, 0);
+    end_time_tm.tm_hour = 0;
+    end_time_tm.tm_min = 0;
+    end_time_tm.tm_sec = 0;
+
+    struct Handler
+    {
+        bool received = false, uploaded = false, lost = false;
+        static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
+        {
+            Handler* ptr = (Handler*) handler_ptr;
+            ptr->received = ptr->uploaded = ptr->lost = false;
+            if(!strcmp(row_val[0], "1"))
+            {
+                ptr->received = true;
+            }
+            if(!strcmp(row_val[1], "1"))
+            {
+                ptr->uploaded = true;
+            }
+            if(!strcmp(row_val[2], "1"))
+            {
+                ptr->lost = true;
+            }
+            return 0;
+        }
+    };
+
+    int sn;
+    Handler handler;
+
+    std::ifstream fin(volunteer_table);
+    std::ofstream fout(sensor_info_table);
+    if(!fin.is_open())
+    {
+        std::stringstream ss;
+        ss << "Error opening volunteer table: " << volunteer_table << "\n";
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    if(!fout.is_open())
+    {
+        std::stringstream ss;
+        ss << "Error opening sensor info table: " << sensor_info_table << "\n";
+        std::string msg = ss.str();
+        throw std::runtime_error(msg);
+    }
+
+    std::string sql;
+    char* err_msg;
+
+    fout << "serial_num,";
+    std::tm temp_start = start_time_tm;
+    while(temp_start < end_time_tm)
+    {
+        int week = get_week_of_year(&temp_start);
+        fout << std::to_string(temp_start.tm_year + 1900) << "-" << week << ",";
+        temp_start.tm_mday += 7;
+    }
+    fout << "\n";
+    
+    while(fin >> sn)
+    {
+        std::tm temp_start = start_time_tm;
+        fout << sn << ",";
+        while(temp_start < end_time_tm)
+        {
+            int week = get_week_of_year(&temp_start);
+            sql = "SELECT RECEIVED, UPLOADED, LOST FROM " + info_table_name + " WHERE" \
+                   " SN = " + std::to_string(sn) +
+                   " AND YEAR = " + std::to_string(temp_start.tm_year) +
+                   " AND WEEK = " + std::to_string(week) + ";";
+            std::cout << "debug: " << sql << "\n";
+
+            rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
+
+            if(handler.received)
+            {
+                fout << "O";
+            }
+            if(handler.uploaded)
+            {
+                fout << "V";
+            }
+            if(handler.lost)
+            {
+                fout << "X";
+            }
+            fout << ",";
+
+            if(rc != SQLITE_OK)
+            {
+                std::string err_str = std::string(err_msg);
+                std::runtime_error e(err_msg);
+                sqlite3_free(err_msg);
+                sqlite3_close(db);
+                throw e;
+            }
+
+            temp_start.tm_mday += 7;
+        }
+        fout << "\n";
+    }
+}
+
 } // namespace MBC

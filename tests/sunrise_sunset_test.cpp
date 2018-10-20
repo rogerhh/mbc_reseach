@@ -12,4 +12,8 @@ TEST(create_table)
     get_sunrise_sunset_time("08/22/18", 43.29, -83.17);
 }
 
+TEST(print_data)
+{
+}
+
 TEST_MAIN();

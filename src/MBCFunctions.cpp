@@ -113,12 +113,15 @@ std::tm read_tm_string(const std::string& time_string, const double GMT_time)
     get_string(str, time_string, " ", lastpos);
     tm.tm_sec = std::stoi(str);
     get_string(sign, time_string, ",", lastpos);
+    std::cout << "debug: sign = " << sign << "\n";
     if(tm.tm_hour == 12 && sign == "AM") { tm.tm_hour = 0; }
     else if(tm.tm_hour != 12 && sign == "PM") { tm.tm_hour += 12; }
+/*
     else
     {
         assert("AM PM not specified\n" && 0);
     }
+*/
     tm.tm_hour -= GMT_time;
     return tm;
 }
@@ -796,7 +799,7 @@ int get_weather_data(std::vector<WeatherData>& v,
 
     CURL* curl;
     CURLcode res;
-    curl_global_init(CURL_GLOBAL_DEFAULT);
+    // curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
 
     if(curl)
@@ -1073,7 +1076,7 @@ int get_weather_data(std::vector<WeatherData>& v,
         }
     }
 
-    curl_global_cleanup();
+    curl_easy_cleanup(curl);
 
     struct Handler_1
     {
@@ -1103,10 +1106,10 @@ int get_weather_data(std::vector<WeatherData>& v,
           " AND SECONDS_AFTER_EPOCH < " + std::to_string(end_time) + 
           " AND LATITUDE = " + std::to_string(latitude) +
           " AND LONGITUDE = " + std::to_string(longitude) + ";";
-    std::cout << sql << "\n";
+    // std::cout << sql << "\n";
 
     rc = sqlite3_exec(db, sql.c_str(), Handler_1::callback, &handler_1, &err_msg);
-    std::cout << v.size() << "\n";
+    // std::cout << v.size() << "\n";
 
     if(rc != SQLITE_OK)
     {
@@ -1118,7 +1121,6 @@ int get_weather_data(std::vector<WeatherData>& v,
     }
 
     sqlite3_close(db);
-
 
     return v.size();
 }
@@ -1194,12 +1196,14 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     {
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
 
     if(handler.got_data_flag)
     {
         std::cout << "debug: read from database.\n";
+        sqlite3_close(db);
         return handler.data;
     }
 
@@ -1236,7 +1240,6 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     
     CURL* curl;
     CURLcode res;
-    curl_global_init(CURL_GLOBAL_DEFAULT);
     curl = curl_easy_init();
 
     memory_t data;
@@ -1247,7 +1250,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
         std::string date_str = std::to_string(date_tm.tm_year + 1900) + "-" +
                                std::to_string(date_tm.tm_mon + 1) + "-" +
                                std::to_string(date_tm.tm_mday);
-        std::string url = "https://api.sunrise-sunset.org/json?" \
+        std::string url = "http://api.sunrise-sunset.org/json?" \
                           "&lat=" + std::to_string(latitude) +
                           "&lng=" + std::to_string(longitude) +
                           "&date=" + date_str;
@@ -1257,6 +1260,8 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
         curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_t::write_callback);
         curl_easy_setopt(curl, CURLOPT_WRITEDATA, &data);
 
+        std::cout << url << "\n";
+
         res = curl_easy_perform(curl);
         if(res != CURLE_OK)
         {
@@ -1264,14 +1269,15 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
         }
     }
 
-    curl_global_cleanup();
+    curl_easy_cleanup(curl);
 
     std::cout << "debug: read from web\n";
-    std::cout << data.contents << "\n";
+    // std::cout << data.contents << "\n";
 
     std::string result = std::string(data.contents);
     if(result.find("\"status\":\"OK\"") == std::string::npos)
     {
+        sqlite3_close(db);
         throw std::runtime_error("Load sunrise-sunset api error\n");
     }
 
@@ -1287,7 +1293,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     get_string(str, result, "\"sunset\":\"", lastpos);
     get_string(str, result, "\"", lastpos);
     str = date + "-" + str + ",";
-    std::cout << "debug: str = " << str << "\n";
+    // std::cout << "debug: str = " << str << "\n";
     std::tm sunset_tm = read_tm_string(str, 0);
     std::time_t sunset_time = timegm(&sunset_tm);
 
@@ -1297,7 +1303,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
         sunset_time = timegm(&sunset_tm);
     }
 
-    std::cout << "debug: sunrise = " << sunrise_time << " sunset = " << sunset_time << "\n";
+    // std::cout << "debug: sunrise = " << sunrise_time << " sunset = " << sunset_time << "\n";
 
     get_insertion_string(sql, table_name, 5,
                          ("\"" + date + "\"").c_str(),
@@ -1306,7 +1312,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
                          std::to_string(sunrise_time).c_str(),
                          std::to_string(sunset_time).c_str());
 
-    std::cout << "debug: sql = " << sql << "\n";
+    // std::cout << "debug: sql = " << sql << "\n";
 
     rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
 
@@ -1315,10 +1321,13 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
         std::string err_str = std::string(err_msg);
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
 
-    return SunriseSunsetData(date, latitude, longitude, sunrise_time, sunset_time);
+    sqlite3_close(db);
+
+    return SunriseSunsetData(); //(date, latitude, longitude, sunrise_time, sunset_time);
 }
 
 void sort_volunteer_data(const std::string& start_time_str,
@@ -1413,7 +1422,7 @@ void sort_volunteer_data(const std::string& start_time_str,
                    " SN = " + std::to_string(sn) +
                    " AND SECONDS_AFTER_EPOCH >= " + std::to_string(std::mktime(&temp_start)) + 
                    " AND SECONDS_AFTER_EPOCH < " + std::to_string(std::mktime(&temp_end)) + ";";
-            std::cout << "debug: " << sql << "\n";
+            // std::cout << "debug: " << sql << "\n";
 
             rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
 
@@ -1451,7 +1460,7 @@ void sort_volunteer_data(const std::string& start_time_str,
 
     store_sql = store_sql + "COMMIT TRANSACTION;";
     rc = sqlite3_exec(db, store_sql.c_str(), Handler::callback, &handler, &err_msg);
-    std::cout << "debug: store_sql = " << store_sql << "\n";
+    // std::cout << "debug: store_sql = " << store_sql << "\n";
 
     if(rc != SQLITE_OK)
     {
@@ -1564,7 +1573,7 @@ void print_volunteer_data(const std::string& start_time_str,
                    " SN = " + std::to_string(sn) +
                    " AND YEAR = " + std::to_string(temp_start.tm_year) +
                    " AND WEEK = " + std::to_string(week) + ";";
-            std::cout << "debug: " << sql << "\n";
+            // std::cout << "debug: " << sql << "\n";
 
             rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
 

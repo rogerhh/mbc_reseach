@@ -245,6 +245,7 @@ int add_file_to_sqlite(const std::string& path,
         std::stringstream ss;
         ss << "Error connecting to sqlite database: " << database_path;
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -266,6 +267,7 @@ int add_file_to_sqlite(const std::string& path,
     {
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
 
@@ -277,6 +279,7 @@ int add_file_to_sqlite(const std::string& path,
     {
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
 
@@ -408,6 +411,7 @@ int add_file_to_sqlite(const std::string& path,
                 std::string err_str = std::string(err_msg);
                 std::runtime_error e(err_msg);
                 sqlite3_free(err_msg);
+                sqlite3_close(db);
                 throw e;
             }
 
@@ -427,6 +431,7 @@ int add_file_to_sqlite(const std::string& path,
     {
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
 
@@ -1052,6 +1057,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                 std::runtime_error e(err_msg);
                 sqlite3_free(err_msg);
                 sqlite3_close(db);
+                curl_easy_cleanup(curl);
                 throw e;
             }
 
@@ -1071,6 +1077,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                 std::runtime_error e(err_msg);
                 sqlite3_free(err_msg);
                 sqlite3_close(db);
+                curl_easy_cleanup(curl);
                 throw e;
             }
         }
@@ -1140,6 +1147,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
         std::stringstream ss;
         ss << "Error connecting to sqlite database: " << database_path;
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -1343,6 +1351,7 @@ void sort_volunteer_data(const std::string& start_time_str,
         std::stringstream ss;
         ss << "Error connecting to sqlite database: " << database_path;
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -1364,6 +1373,7 @@ void sort_volunteer_data(const std::string& start_time_str,
     {
         std::runtime_error e(err_msg);
         sqlite3_free(err_msg);
+        sqlite3_close(db);
         throw e;
     }
 
@@ -1386,6 +1396,7 @@ void sort_volunteer_data(const std::string& start_time_str,
         std::stringstream ss;
         ss << "Error opening volunteer table: " << volunteer_table << "\n";
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -1471,6 +1482,7 @@ void sort_volunteer_data(const std::string& start_time_str,
         throw e;
     }
 
+    sqlite3_close(db);
 }
 
 void print_volunteer_data(const std::string& start_time_str,
@@ -1487,6 +1499,7 @@ void print_volunteer_data(const std::string& start_time_str,
         std::stringstream ss;
         ss << "Error connecting to sqlite database: " << database_path;
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -1538,6 +1551,7 @@ void print_volunteer_data(const std::string& start_time_str,
         std::stringstream ss;
         ss << "Error opening volunteer table: " << volunteer_table << "\n";
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -1546,6 +1560,7 @@ void print_volunteer_data(const std::string& start_time_str,
         std::stringstream ss;
         ss << "Error opening sensor info table: " << sensor_info_table << "\n";
         std::string msg = ss.str();
+        sqlite3_close(db);
         throw std::runtime_error(msg);
     }
 
@@ -1604,6 +1619,7 @@ void print_volunteer_data(const std::string& start_time_str,
         }
         fout << "\n";
     }
+    sqlite3_close(db);
 }
 
 } // namespace MBC

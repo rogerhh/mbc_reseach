@@ -833,14 +833,14 @@ int get_weather_data(std::vector<WeatherData>& v,
             std::strftime(new_start_date_str, 64, "%Y-%m-%d", &new_start_date_tm);
             std::strftime(last_end_date_str, 64, "%Y-%m-%d", &last_end_date_tm); 
             // tm_to_full_string(new_start_date_tm);
-            std::string url = "https://api.weatherbit.io/v2.0/history/hourly" \
+            std::string url = "http://api.weatherbit.io/v2.0/history/hourly" \
                               "?lat=" + std::to_string(latitude) +
                               "&lon=" + std::to_string(longitude) +
                               "&start_date=" + std::string(new_start_date_str) +
                               "&end_date=" + std::string(last_end_date_str) +
                               "&tz=utc" +
                               "&key=" + std::string(weatherbit_api_key);
-            std::cout << "url = " << url << "\n";
+            // std::cout << "url = " << url << "\n";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_t::write_callback);
@@ -851,7 +851,7 @@ int get_weather_data(std::vector<WeatherData>& v,
             {
                 std::cout << "Error: " << curl_easy_strerror(res) << "\n";
             }
-            // std::cout << "debug: contents = " << data.contents << std::flush << "\n" << data.size << "\n" << std::flush;
+            std::cout << "debug: contents = " << data.contents << std::flush << "\n" << data.size << "\n" << std::flush;
 
             // parse response
             std::vector<WeatherData> weather_v;

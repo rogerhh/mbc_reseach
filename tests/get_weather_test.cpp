@@ -14,6 +14,6 @@ using namespace std;
 int main(int argc, char** argv)
 {
     std::vector<WeatherData> v;
-    get_weather_data(v, 60.0, -83.27, "04/06/18-00:00:00", "04/07/18-00:00:00");
+    get_weather_data(v, 30, -65, "04/06/18-00:00:00", "04/07/18-00:00:00");
     return 0;
 }

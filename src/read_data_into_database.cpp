@@ -41,7 +41,7 @@ int main (int argc, char** argv)
 
         // get path to file
         get_string(path, line, ",", lastpos);
-        path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files/" + path;
+        path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_5/" + path;
         
         // get latitude
         get_string(str, line, "o", lastpos);

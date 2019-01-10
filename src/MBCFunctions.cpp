@@ -1622,4 +1622,31 @@ void print_volunteer_data(const std::string& start_time_str,
     sqlite3_close(db);
 }
 
+void sort_datapoints(const std::string& start_time_str,
+                     const std::string& end_time_str,
+                     const std::string& database_path)
+{
+    // connect with sqlite db
+    sqlite3* db;
+    int rc = sqlite3_open(database_path.c_str(), &db);
+    if(rc != SQLITE_OK)
+    {
+        std::stringstream ss;
+        ss << "Error connecting to sqlite database: " << database_path;
+        std::string msg = ss.str();
+        sqlite3_close(db);
+        throw std::runtime_error(msg);
+    }
+
+    std::tm start_tm = read_tm_format(start_time_str, 0);
+    std::tm end_tm = read_tm_format(end_time_str, 0);
+    while(start_tm <= end_tm)
+    {
+        std::tm temp_end = start_tm;
+        temp_end.tm_mday++;
+        temp_end.tm_sec--;
+        reset_tm(&temp_end);
+    }
+}
+
 } // namespace MBC

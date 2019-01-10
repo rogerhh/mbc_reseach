@@ -8,7 +8,7 @@ using namespace MBC;
 
 TEST(sort_volunteer)
 {
-    print_volunteer_data("09/01/18-00:00:00", "11/01/18-00:00:00");
+    print_volunteer_data("09/01/18-00:00:00", "11/15/18-00:00:00");
 }
 
 TEST_MAIN();

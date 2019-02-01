@@ -36,7 +36,12 @@ TEST(retrieve_data)
 {
     vector<vector<DataPoint>> v;
     vector<int> serial_v;
-    int res = select_datapoints(v, serial_v, "SECONDS_AFTER_EPOCH >= 1530014400 AND SECONDS_AFTER_EPOCH < 1530014460 AND SN = 20369361");
+    std::cout << "test\n";
+    std::cout << select_datapoints(v, serial_v, "SECONDS_AFTER_EPOCH >= 1541116800 AND SN = 20305333") << "\n";
+    std::cout << "test\n";
+    // int res = select_datapoints(v, serial_v, "SECONDS_AFTER_EPOCH >= 1530014400 AND SECONDS_AFTER_EPOCH < 1530014460 AND SN = 20369361");
+/*
+ *AND SECONDS_AFTER_EPOCH < 1541203200 
     ASSERT_EQUAL(res, 6);
     ASSERT_EQUAL(v[0][0].serial_num, 20369361);
     ASSERT_EQUAL(v[0][0].time, 1530014400);
@@ -79,6 +84,8 @@ TEST(retrieve_data)
     ASSERT_EQUAL(v[0][5].data[DataPoint::LONGITUDE], -83.724722);
     ASSERT_EQUAL(v[0][5].data[DataPoint::LIGHT_INTENSITY], 7536.64);
     ASSERT_EQUAL(v[0][5].data[DataPoint::TEMPERATURE], 18.4);
+*/
+
 }
 
 TEST_MAIN();

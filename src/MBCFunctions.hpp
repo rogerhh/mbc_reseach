@@ -100,9 +100,9 @@ void print_volunteer_data(const std::string& start_time_str,
                           const std::string& sensor_info_table = SENSOR_INFO_TABLE,
                           const std::string& database_path = DATABASE_DB);
 
-void sort_datapoints(const std::string& start_time_str,
-                     const std::string& end_time_str,
-                     const std::string& database_path = DATABASE_DB);
+int sort_datapoints(const std::string& start_time_str,
+                    const std::string& end_time_str,
+                    const std::string& database_path = DATABASE_DB);
 
 } // namespace MBC
 

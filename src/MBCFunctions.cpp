@@ -13,6 +13,8 @@
 #include <curl/curl.h>
 #include <utility>
 #include <cassert>
+#include <unordered_set>
+#include <unordered_map>
 
 namespace MBC
 {
@@ -1622,12 +1624,13 @@ void print_volunteer_data(const std::string& start_time_str,
     sqlite3_close(db);
 }
 
-void sort_datapoints(const std::string& start_time_str,
-                     const std::string& end_time_str,
-                     const std::string& database_path)
+int sort_datapoints(const std::string& start_time_str,
+                    const std::string& end_time_str,
+                    const std::string& database_path)
 {
     // connect with sqlite db
     sqlite3* db;
+    char* err_msg;
     int rc = sqlite3_open(database_path.c_str(), &db);
     if(rc != SQLITE_OK)
     {
@@ -1638,15 +1641,57 @@ void sort_datapoints(const std::string& start_time_str,
         throw std::runtime_error(msg);
     }
 
+    struct Handler
+    {
+        int count = 0;
+        std::unordered_set<int> uset;
+
+        static int callback(void* handler_ptr, int col_num, char** row_val, char** col_name)
+        {
+            int serial_num = atoi(row_val[0]);
+            Handler* handler = (Handler*) handler_ptr;
+            if(handler->uset.find(serial_num) == handler->uset.end())
+            {
+                handler->uset.insert(serial_num);
+                handler->count++;
+            }
+            return 0;
+        }
+    };
+
     std::tm start_tm = read_tm_format(start_time_str, 0);
     std::tm end_tm = read_tm_format(end_time_str, 0);
+    int valid_day_count = 0;
     while(start_tm <= end_tm)
     {
         std::tm temp_end = start_tm;
         temp_end.tm_mday++;
-        temp_end.tm_sec--;
-        reset_tm(&temp_end);
+        
+        std::string sql = "SELECT SN FROM SENSOR_DATA WHERE SECONDS_AFTER_EPOCH >= " +
+                          std::to_string(timegm(&start_tm)) +
+                          " AND SECONDS_AFTER_EPOCH < " + 
+                          std::to_string(timegm(&temp_end));
+        std::cout << "debug: sql = " << sql << "\n";
+
+        Handler handler;
+        rc = sqlite3_exec(db, sql.c_str(), Handler::callback, &handler, &err_msg);
+
+        if(rc != SQLITE_OK)
+        {
+            std::string err_str = std::string(err_msg);
+            std::runtime_error e(err_msg);
+            sqlite3_free(err_msg);
+            sqlite3_close(db);
+            throw e;
+        }
+
+        valid_day_count += handler.count;
+
+        start_tm = temp_end;
     }
+
+    sqlite3_close(db);
+    return valid_day_count;
 }
 
 } // namespace MBC

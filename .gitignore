@@ -1,5 +1,10 @@
 build/
-data/
+data/*
 
 .exe
 .db
+
+!data/*.txt
+!data/*.csv
+
+*.m~

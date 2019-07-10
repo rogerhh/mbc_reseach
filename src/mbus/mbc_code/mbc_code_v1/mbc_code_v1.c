@@ -350,13 +350,16 @@ void handler_ext_int_reg3       (void) __attribute__ ((interrupt ("IRQ")));
 
 void handler_ext_int_wakeup( void ) { // WAKEUP
     *NVIC_ICPR = (0x1 << IRQ_WAKEUP);
+    // Report who woke up
     mbus_write_message32(0xAA, *SREG_WAKEUP_SOURCE);
 }
 
 void handler_ext_int_timer32( void ) { // TIMER32
     *NVIC_ICPR = (0x1 << IRQ_TIMER32);
+/*
     *REG1 = *TIMER32_CNT;
     *REG2 = *TIMER32_STAT;
+*/
     *TIMER32_STAT = 0x0;
     wfi_timeout_flag = 1;
 }
@@ -441,6 +444,7 @@ static void operation_init( void ) {
     // Default CPU halt function
     set_halt_until_mbus_tx();
 
+    wakeup_data = 0;
     wfi_timeout_flag = 0;
     mbc_state = MBC_IDLE;
 
@@ -463,7 +467,26 @@ int main() {
         operation_init();
     }
 
+    // GOCEP triggered wakeup
+    if(*SREG_WAKEUP_SOURCE == 0)
+    {
+        wakeup_data = *GOC_DATA_IRQ;
+        uint32_t wakeup_data_header = (wakeup_data >> 24) & 0xFF;
+        uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
+        uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
+        uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
+            
+        // For testing
+        if(wakeup_data_header == 0x01) {
+            if(mbc_state == MBC_IDLE) {
+                mbc_state = MBC_SNT_LDO;
+            }
+        }
+    }
+
     // Finite state machine
+    while(1) {
+    
     if(mbc_state == MBC_SNT_LDO) {
         mbc_state = MBC_TEMP_START;
 
@@ -501,7 +524,7 @@ int main() {
             mbus_write_message32(0xFA, 0xFAFAFAFA);
         }
         else {
-            mbc_state = MBC_TEMP_END;
+            mbc_state = MBC_IDLE;
 
             // Output measure value for now
             // TODO: Verify value measured
@@ -510,7 +533,22 @@ int main() {
             // Turn off temp sensor and ldo
             temp_sensor_power_off();
             snt_ldo_power_off();
-
         }
     }
+    else if(mbc_state == MBC_IDLE) {
+        // Go to sleep and wait for next wakeup
+        operation_sleep_notimer();
+    }
+    else {
+        // Should not get here
+        // State not defined; go to sleep
+        mbus_write_message32(0xBA, 0XDEADBEEF);
+        operation_sleep_notimer();
+    }
+
+    }
+
+    // Should not get here
+    operation_sleep_notimer();
+    while(1);
 }

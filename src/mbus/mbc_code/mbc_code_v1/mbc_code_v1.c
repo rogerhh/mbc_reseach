@@ -8,7 +8,7 @@
  ******************************************************************************************/
 
 #include "../include/PREv18.h"
-#include "../include/SNTv1.h"
+#include "../include/SNTv4_RF.h"
 #include "../include/mbus.h"
 
 // uncomment this for debug mbus message

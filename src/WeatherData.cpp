@@ -13,11 +13,37 @@ WeatherData::WeatherData()
     data = std::vector<double>(SIZE_OF_DATA_FIELDS, -1000);
 }
 
-WeatherData::WeatherData(std::time_t time_in)
+WeatherData::WeatherData(const std::time_t time_in, const double latitude, const double longitude)
 : time(time_in)
 {
     data = std::vector<double>(SIZE_OF_DATA_FIELDS, -1000);
+    data[LATITUDE] = latitude;
+    data[LONGITUDE] = longitude;
 }
+
+const char* WeatherData::FIELD_NAMES[] = {"time",
+                             "latitude",
+                             "longitude",
+                             "pressure",
+                             "sea_level_pressure",
+                             "wind_speed",
+                             "wind_direction",
+                             "temperature",
+                             "relative_humidity",
+                             "dew_point",
+                             "cloud_coverage",
+                             "part_of_the_day",
+                             "weather_code",
+                             "visibility",
+                             "precipitation",
+                             "snowfall",
+                             "dhi",
+                             "dni",
+                             "ghi",
+                             "uv_index",
+                             "solar_elevation_angle",
+                             "solar_azimuth_angle",
+                             "solar_hour_angle"};
 
 std::ostream& operator<<(std::ostream& os, WeatherData& weatherdata)
 {

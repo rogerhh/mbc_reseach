@@ -13,19 +13,31 @@
 
 namespace MBC
 {
+bool operator<(std::tm& lhs, std::tm& rhs);
+bool operator==(std::tm& lhs, std::tm& rhs);
+bool operator<=(std::tm& lhs, std::tm& rhs);
 
 // file path to database.db
 static const std::string DATABASE_DB = std::string(mbc_source_dir) + "/data/mbc_database.db";
+static const std::string VOLUNTEER_TABLE = std::string(mbc_source_dir) + "/data/serial_numbers.txt";
+static const std::string SENSOR_INFO_TABLE = std::string(mbc_source_dir) + "/data/sensor_info.csv"; 
 
 std::time_t read_time_format(const std::string& time_string, const double GMT_time);
 
+// read string in mm/dd/yy-hh:mm:ss format
 std::tm read_tm_format(const std::string& time_string, const double GMT_time);
 
+// read AM and PM
 std::tm read_tm_string(const std::string& time_string, const double GMT_time);
 
-// modifies str to the string from lastpos to delim. Updates lastpos to the character after delim
-void get_string(std::string& str, const std::string& source, 
-                const std::string& delim, int& lastpos);
+// TODO: deprecate this
+// get string in the form mm/dd/yy-hh:mm:ss
+std::string tm_to_string(std::tm tm);
+
+// modifies str to the string from lastpos to delim. If delim is not found in source, clear str. Updates lastpos to the character after delim
+// return 1 on success and 0 if delim is not found in source
+int get_string(std::string& str, const std::string& source, 
+               const std::string& delim, int& lastpos);
 
 // wrapper function to get insert query string
 void get_insertion_string(std::string& ret_str, 
@@ -62,12 +74,13 @@ int select_datapoints(std::vector<std::vector<DataPoint>>& matrix,
 // start_time_str and end_time_str must be in the form mm/dd/yy-hh:mm:ss.
 // Modifies the vector v into weather data retrieved
 int get_weather_data(std::vector<WeatherData>& v,
-                     const double latitude,
-                     const double longitude,
+                     const long double latitude,
+                     const long double longitude,
                      const std::string& start_time_str,
                      const std::string& end_time_str,
                      const std::string& database_path = DATABASE_DB);
 
+// TODO: change to yyyy-mm-dd
 // gets sunrise-sunset times of a day at a particular location
 // date must be in the form mm/dd/yy
 // Returns a SunriseSunsetData object
@@ -76,7 +89,21 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
                                           const long double longitude,
                                           const std::string& database_path = DATABASE_DB);
 
+void sort_volunteer_data(const std::string& start_time_str,
+                         const std::string& end_time_str,
+                         const std::string& volunteer_table = VOLUNTEER_TABLE,
+                         const std::string& database_path = DATABASE_DB);
+
+void print_volunteer_data(const std::string& start_time_str,
+                          const std::string& end_time_str,
+                          const std::string& volunteer_table = VOLUNTEER_TABLE,
+                          const std::string& sensor_info_table = SENSOR_INFO_TABLE,
+                          const std::string& database_path = DATABASE_DB);
+
+int sort_datapoints(const std::string& start_time_str,
+                    const std::string& end_time_str,
+                    const std::string& database_path = DATABASE_DB);
+
 } // namespace MBC
 
 #endif
-

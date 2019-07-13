@@ -32,7 +32,9 @@ public:
     static constexpr int LATITUDE        = 3;
     static constexpr int LONGITUDE       = 4;
 
-    static const std::vector<std::string> FIELD_STRINGS;
+    // string vector containing the name of all fields including serial number and time
+    static const int SIZE_OF_FIELD_NAMES = 7;
+    static const char* FIELD_NAMES[];
 
     // initiallizes data to -1000 to indicate that data is unavailable
     std::vector<double> data;

@@ -50,11 +50,12 @@ std::ostream& operator<<(std::ostream& os, DataPoint& datapoint)
     return os;
 }
 
-const std::vector<std::string> DataPoint::FIELD_STRINGS = {"LIGHT_INTENSITY",
-                                                           "TEMPERATURE",
-                                                           "PRESSURE",
-                                                           "LONGITUDE",
-                                                           "LATITUDE",
-                                                           "WEATHER"};
+const char* DataPoint::FIELD_NAMES[] = {"serial_num",
+                                        "time",
+                                        "light_intensity",
+                                        "temperature",
+                                        "pressure",
+                                        "latitude",
+                                        "longitude"};
 
 } // namespace MBC

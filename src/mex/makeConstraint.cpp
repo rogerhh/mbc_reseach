@@ -73,7 +73,7 @@ void mexFunction(int nlhs, mxArray* plhs[], const int nrhs, const mxArray* prhs[
     }
     else if(var_name.find("TEMP") != std::string::npos)
     {
-        var_name = "TERMPERATURE";
+        var_name = "TEMPERATURE";
     }
     else
     {

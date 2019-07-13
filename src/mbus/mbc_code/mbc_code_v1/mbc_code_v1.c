@@ -54,9 +54,9 @@ volatile prev18_r19_t prev18_r19 = PREv18_R19_DEFAULT;
 volatile prev18_r1A_t prev18_r1A = PREv18_R1A_DEFAULT;
 volatile prev18_r1C_t prev18_r1C = PREv18_R1C_DEFAULT;
 
-volatile sntv1_r00_t sntv1_r00 = SNTv1_R00_DEFAULT;
-volatile sntv1_r01_t sntv1_r01 = SNTv1_R01_DEFAULT;
-volatile sntv1_r07_t sntv1_r07 = SNTv1_R07_DEFAULT;
+volatile sntv4_r00_t sntv4_r00 = SNTv4_R00_DEFAULT;
+volatile sntv4_r01_t sntv4_r01 = SNTv4_R01_DEFAULT;
+volatile sntv4_r07_t sntv4_r07 = SNTv4_R07_DEFAULT;
 
 
 /**********************************************
@@ -136,10 +136,14 @@ void xo_init( void ) {
     prev18_r19.XO_DRV_CORE     = 0x1;
     prev18_r19.XO_SCN_CLK_SEL  = 0x1;
     *REG_XO_CONF1 = prev18_r19.as_int;
-
+    
     enable_xo_timer();
     // TODO: Not needed? Takes power
     start_xo_cout();
+
+    // BREAKPOINT 0x03
+    mbus_write_message32(0xBA, 0x03);
+
 }
 
 void xo_turn_off( void ) {
@@ -205,54 +209,54 @@ static void XO_init( void ) {
  * Temp sensor functions (SNTv4)
  **********************************************/
 static void temp_sensor_start() {
-    sntv1_r01.TSNS_RESETn = 1;
-    mbus_remote_register_write(SNT_ADDR, 1, sntv1_r01.as_int);
+    sntv4_r01.TSNS_RESETn = 1;
+    mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
 }
 
 static void temp_sensor_reset() {
-    sntv1_r01.TSNS_RESETn = 0;
-    mbus_remote_register_write(SNT_ADDR, 1, sntv1_r01.as_int);
+    sntv4_r01.TSNS_RESETn = 0;
+    mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
 }
 
 static void snt_ldo_vref_on() {
-    sntv1_r00.LDO_EN_VREF = 1;
-    mbus_remote_register_write(SNT_ADDR, 0, sntv1_r00.as_int);
+    sntv4_r00.LDO_EN_VREF = 1;
+    mbus_remote_register_write(SNT_ADDR, 0, sntv4_r00.as_int);
 }
 
 static void snt_ldo_power_on() {
-    sntv1_r00.LDO_EN_IREF = 1;
-    sntv1_r00.LDO_EN_LDO  = 1;
-    mbus_remote_register_write(SNT_ADDR, 0, sntv1_r00.as_int);
+    sntv4_r00.LDO_EN_IREF = 1;
+    sntv4_r00.LDO_EN_LDO  = 1;
+    mbus_remote_register_write(SNT_ADDR, 0, sntv4_r00.as_int);
 }
 
 static void snt_ldo_power_off() {
-    sntv1_r00.LDO_EN_VREF = 0;
-    sntv1_r00.LDO_EN_IREF = 0;
-    sntv1_r00.LDO_EN_LDO  = 0;
-    mbus_remote_register_write(SNT_ADDR, 0, sntv1_r00.as_int);
+    sntv4_r00.LDO_EN_VREF = 0;
+    sntv4_r00.LDO_EN_IREF = 0;
+    sntv4_r00.LDO_EN_LDO  = 0;
+    mbus_remote_register_write(SNT_ADDR, 0, sntv4_r00.as_int);
 }
 
 static void temp_sensor_power_on() {
     // Un-powergate digital block
-    sntv1_r01.TSNS_SEL_LDO = 1;
-    mbus_remote_register_write(SNT_ADDR, 1, sntv1_r01.as_int);
+    sntv4_r01.TSNS_SEL_LDO = 1;
+    mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
     // Un-powergate analog block
-    sntv1_r01.TSNS_EN_SENSOR_LDO = 1;
-    mbus_remote_register_write(SNT_ADDR, 1, sntv1_r01.as_int);
+    sntv4_r01.TSNS_EN_SENSOR_LDO = 1;
+    mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
 
     delay(MBUS_DELAY);
 
     // Release isolation
-    sntv1_r01.TSNS_ISOLATE = 0;
-    mbus_remote_register_write(SNT_ADDR, 1, sntv1_r01.as_int);
+    sntv4_r01.TSNS_ISOLATE = 0;
+    mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
 }
 
 static void temp_sensor_power_off() {
-    sntv1_r01.TSNS_RESETn        = 0;
-    sntv1_r01.TSNS_SEL_LDO       = 0;
-    sntv1_r01.TSNS_EN_SENSOR_LDO = 0;
-    sntv1_r01.TSNS_ISOLATE       = 1;
-    mbus_remote_register_write(SNT_ADDR, 1, sntv1_r01.as_int);
+    sntv4_r01.TSNS_RESETn        = 0;
+    sntv4_r01.TSNS_SEL_LDO       = 0;
+    sntv4_r01.TSNS_EN_SENSOR_LDO = 0;
+    sntv4_r01.TSNS_ISOLATE       = 1;
+    mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
 }
 
 /**********************************************
@@ -434,6 +438,8 @@ static void operation_init( void ) {
     prev18_r1C.SRAM0_TUNE_DECODER_DLY = 0xF;  // Default 0x2, 4bits
     prev18_r1C.SRAM0_USE_INVERTER_SA  = 0x0;  // Default 0x0, 1bit
 
+    // BREAKPOINT 0x01
+    mbus_write_message32(0xBA, 0x01);
 
     // Enumeration
     enumerated = ENUMID;
@@ -448,10 +454,15 @@ static void operation_init( void ) {
     wfi_timeout_flag = 0;
     mbc_state = MBC_IDLE;
 
+    // BREAKPOINT 0x02
+    mbus_write_message32(0xBA, 0x02);
+
     xo_init();
 
     // Initialization
     // FLASH_init()
+    
+    operation_sleep_notimer();
 }
 
 /**********************************************
@@ -460,11 +471,18 @@ static void operation_init( void ) {
 
 int main() {
     // Only enable relevant interrupts (PREv18)
-    *NVIC_ICER = (1 << IRQ_WAKEUP | 1 << IRQ_GOCEP | 1 << IRQ_REG0);
+    *NVIC_ICER = (1 << IRQ_WAKEUP | 1 << IRQ_GOCEP | 1 << IRQ_REG0 | 
+                  1 << IRQ_REG1 | 1 << IRQ_REG2 | 1 << IRQ_REG3);
+
+    // BREAKPOINT 0x00
+    mbus_write_message32(0xBA, 0x00);
 
     // Initialization
     if(enumerated != ENUMID) {
         operation_init();
+        
+        // BREAKPOINT 0x01
+        mbus_write_message32(0xBA, 0x01);
     }
 
     // GOCEP triggered wakeup
@@ -486,6 +504,8 @@ int main() {
 
     // Finite state machine
     while(1) {
+
+    mbus_write_message32(0xBA, mbc_state);
     
     if(mbc_state == MBC_SNT_LDO) {
         mbc_state = MBC_TEMP_START;

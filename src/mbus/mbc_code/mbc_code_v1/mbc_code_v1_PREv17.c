@@ -415,6 +415,15 @@ static void operation_sleep_notimer( void ) {
     operation_sleep();
 }
 
+void set_wakeup_timer_prev17 ( uint32_t timestamp, uint8_t irq_en, uint8_t reset ){
+	uint32_t regval = timestamp;
+	if( irq_en ) regval |= 0x030000; // IRQ in Sleep-Only
+	else		 regval &= 0xFCFFFF;
+    *REG_WUPT_CONFIG = regval;
+
+	if( reset ) *WUPT_RESET = 0x01;
+}
+
 /**********************************************
  * End of program sleep operation
  **********************************************/
@@ -489,6 +498,14 @@ int main() {
 
     // BREAKPOINT 0x00
     mbus_write_message32(0xBA, 0x00);
+
+//    uint32_t nvic_temp = (1 << IRQ_WAKEUP | 1 << IRQ_GOCEP | 1 << IRQ_TIMER32 | 
+//		  1 << IRQ_REG0 | 1 << IRQ_REG1 | 1 << IRQ_REG2 | 1 << IRQ_REG3);
+//
+//    mbus_write_message32(0xBA, nvic_temp);
+//
+//    *NVIC_ISER = nvic_temp;
+
 
     // Initialization
     if(enumerated != ENUMID) {
@@ -588,5 +605,13 @@ int main() {
 
     // Should not get here
     operation_sleep_notimer();
+
+    set_wakeup_timer_prev17(10, 1, 1);
+
+    mbus_write_message32(0xAE, 0xDEADBEEF);
+
+    operation_sleep();
+
     while(1);
 }
+

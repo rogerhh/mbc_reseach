@@ -7,9 +7,9 @@
  *
  ******************************************************************************************/
 
-#include "PREv18.h"
-#include "SNTv4_RF.h"
-#include "mbus.h"
+#include "../include/PREv18.h"
+#include "../include/SNTv4_RF.h"
+#include "../include/mbus.h"
 
 // uncomment this for debug mbus message
 //#define DEBUG_MBUS_MSG
@@ -25,11 +25,14 @@
 #define MBUS_DELAY 100      // Amount of delay between successive messages; 100: 6-7ms
 
 // MBC states
-#define MBC_IDLE       0x0
-#define MBC_SNT_LDO    0x1
-#define MBC_TEMP_START 0x2
-#define MBC_TEMP_READ  0x3
-#define MBC_TEMP_END   0x4
+#define MBC_IDLE        0x0
+#define MBC_SNT_LDO     0x1
+#define MBC_TEMP_START  0x2
+#define MBC_TEMP_READ   0x3
+#define MBC_TEMP_END    0x4
+#define MBC_FLASH_WAIT1     0x5
+#define MBC_FLASH_WAIT2     0x6
+#define MBC_TEMP_TEST   0x7
 
 // CP parameters
 #define TIMERWD_VAL 0xFFFFF  // 0xFFFFF about 13 sec with Y5 running default clock (PRCv17)
@@ -47,6 +50,8 @@ volatile uint32_t enumerated;
 volatile uint32_t wakeup_data;
 volatile uint32_t wfi_timeout_flag;
 volatile uint32_t mbc_state;
+volatile uint32_t flash_addr;
+volatile uint32_t flash_data;
 
 // default register values
 volatile prev18_r0B_t prev18_r0B = PREv18_R0B_DEFAULT;
@@ -289,10 +294,18 @@ void FLASH_init( void ) {
 
 void FLASH_turn_on() {
     set_halt_until_mbus_trx();
+    mbus_remote_register_write(FLP_ADDR, 0x11, 0x00002F);
+    set_halt_until_mbus_tx();
+
+    if(*REG1 != 0xB5) { flp_fail(1); }
+}
+
+void FLASH_turn_off() {
+    set_halt_until_mbus_trx();
     mbus_remote_register_write(FLP_ADDR, 0x11, 0x00002D);
     set_halt_until_mbus_tx();
 
-    if(*REG1 != 0xBB) { flp_fail(1); }
+    if(*REG1 != 0xBB) { flp_fail(2); }
 }
 
 inline void FLASH_write_to_SRAM_bulk(uint32_t* remote_addr, 
@@ -309,6 +322,7 @@ inline void FLASH_read_from_SRAM_bulk(uint32_t* remote_addr,
                                           length_in_words_minus_one);
 }
 
+// REQUIRES: FLASH is turned on
 void copy_mem_from_SRAM_to_FLASH(uint32_t SRAM_addr, 
                                  uint32_t FLASH_addr, 
                                  uint32_t length_in_words_minus_one) {
@@ -325,6 +339,7 @@ void copy_mem_from_SRAM_to_FLASH(uint32_t SRAM_addr,
     if(*REG1 != 0x00003F) { flp_fail(2); }
 }
 
+// REQUIRES: FLASH is turned on
 void copy_mem_from_FLASH_to_SRAM(uint32_t SRAM_addr, 
                                  uint32_t FLASH_addr,
                                  uint32_t length_in_words_minus_one) {
@@ -339,6 +354,27 @@ void copy_mem_from_FLASH_to_SRAM(uint32_t SRAM_addr,
     set_halt_until_mbus_tx();
 
     if(*REG1 != 0x00002B) { flp_fail(3); }
+}
+
+// REQUIRES: FLASH is turned on
+void FLASH_erase_page(uint32_t FLASH_addr) {
+    mbus_remote_register_write(FLP_ADDR, 0x08, FLASH_addr & 0x7F00);
+
+    set_halt_until_mbus_trx();
+    mbus_remote_register_write(FLP_ADDR, 0x09, (0x1 << 5) |
+                                               (0x4 << 1) |
+                                               (0x1 << 0));
+    set_halt_until_mbus_tx();
+
+    if(*REG1 != 0x00004F) { flp_fail(4); }
+}
+
+// REQUIRES: FLASH is turned on
+void FLASH_erase_all() {
+    uint32_t i;
+    for(i = 0; i < 0x7F; ++i) {
+        FLASH_erase_page(i << 8);
+    }
 }
 
 /**********************************************
@@ -415,6 +451,7 @@ static void operation_sleep_notimer( void ) {
     operation_sleep();
 }
 
+// TEMP WAKEUP TIMER FUNCTION
 void set_wakeup_timer_prev17 ( uint32_t timestamp, uint8_t irq_en, uint8_t reset ){
 	uint32_t regval = timestamp;
 	if( irq_en ) regval |= 0x030000; // IRQ in Sleep-Only
@@ -499,14 +536,6 @@ int main() {
     // BREAKPOINT 0x00
     mbus_write_message32(0xBA, 0x00);
 
-//    uint32_t nvic_temp = (1 << IRQ_WAKEUP | 1 << IRQ_GOCEP | 1 << IRQ_TIMER32 | 
-//		  1 << IRQ_REG0 | 1 << IRQ_REG1 | 1 << IRQ_REG2 | 1 << IRQ_REG3);
-//
-//    mbus_write_message32(0xBA, nvic_temp);
-//
-//    *NVIC_ISER = nvic_temp;
-
-
     // Initialization
     if(enumerated != ENUMID) {
         operation_init();
@@ -515,22 +544,79 @@ int main() {
         mbus_write_message32(0xBA, 0x01);
     }
 
-    mbus_write_message32(0xAD, *GOC_DATA_IRQ);
-
     // GOCEP triggered wakeup
     if((*SREG_WAKEUP_SOURCE & 1) == 1)
     {
         wakeup_data = *GOC_DATA_IRQ;
         mbus_write_message32(0xAD, wakeup_data);
         uint32_t wakeup_data_header = (wakeup_data >> 24) & 0xFF;
-        uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
-        uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
-        uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
+        // uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
+        // uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
+        // uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
             
-        // For testing
         if(wakeup_data_header == 0x01) {
+            // For testing
+            // Take a manual temp measurement
             if(mbc_state == MBC_IDLE) {
                 mbc_state = MBC_SNT_LDO;
+            }
+        }
+        else if(wakeup_data_header == 0x02) {
+            // Erase flash
+            FLASH_turn_on();
+            FLASH_erase_all();
+            FLASH_turn_off();
+        }
+        else if(wakeup_data_header == 0x03) {
+            // Store 1 32-bit word in flash
+            // Needs 3 GOCEP interrupts
+            if(mbc_state == MBC_IDLE) {
+                mbc_state = MBC_FLASH_WAIT1;
+                flash_addr = wakeup_data & 0x7FFF;
+            }
+            else if(mbc_state == MBC_FLASH_WAIT1) {
+                mbc_state = MBC_FLASH_WAIT2;
+                flash_data = (wakeup_data & 0xFF) << 8;
+            }
+            else if(mbc_state == MBC_FLASH_WAIT2) {
+                mbc_state = MBC_IDLE;
+                flash_data |= (wakeup_data & 0xFF);
+                uint32_t temp_arr[1] = { flash_data };
+                // Using starting address in SRAM
+                FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
+                FLASH_turn_on();
+                copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
+                FLASH_turn_off();
+            }
+        }
+        else if(wakeup_data_header == 0x04) {
+            // Read an array from flash
+            // Needs 2 GOCEP interrupts
+            if(mbc_state == MBC_IDLE) {
+                mbc_state = MBC_FLASH_WAIT1;
+                flash_addr = wakeup_data & 0x7FFF;
+            }
+            else if(MBC_FLASH_WAIT1) {
+                mbc_state = MBC_IDLE;
+                uint32_t length_in_words_minus_one = wakeup_data & 0xFF;
+                FLASH_turn_on();
+                copy_mem_from_FLASH_to_SRAM(flash_addr, 0x000, 
+                                            length_in_words_minus_one);
+                FLASH_turn_off();
+                uint32_t temp_arr[256];
+                mbus_copy_mem_from_remote_to_any_bulk(FLP_ADDR, (uint32_t*) 0x000, PRE_ADDR,
+                                                      temp_arr, length_in_words_minus_one);
+                uint32_t i;
+                for(i = 0; i < length_in_words_minus_one; ++i) {
+                    mbus_write_message32(0xF1, temp_arr[i]);
+                }
+            }
+        }
+        else if(wakeup_data_header == 0x05) {
+            // Take a temp measurement every 5 secs
+            // Store data into flash after 10 measurements
+            if(mbc_state == MBC_IDLE) {
+            
             }
         }
     }
@@ -605,12 +691,6 @@ int main() {
 
     // Should not get here
     operation_sleep_notimer();
-
-    set_wakeup_timer_prev17(10, 1, 1);
-
-    mbus_write_message32(0xAE, 0xDEADBEEF);
-
-    operation_sleep();
 
     while(1);
 }

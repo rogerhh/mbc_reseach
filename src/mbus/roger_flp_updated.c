@@ -214,14 +214,13 @@ void FLASH_turn_on()
     set_halt_until_mbus_trx();
     mbus_remote_register_write (FLP_ADDR , 0x11 , 0x00002F);
     set_halt_until_mbus_tx();
-    mbus_write_message32(0xE2, 0xDEADBEE3);
 
-    // if (*REG1 != 0xB5) flp_fail (0);
+    if (*REG1 != 0xB5) flp_fail (0);
 }
 
 void FLASH_turn_off()
 {
-    set_halt_until_mbus_rx();
+    set_halt_until_mbus_trx();
     mbus_remote_register_write (FLP_ADDR , 0x11 , 0x00002D);
     set_halt_until_mbus_tx();
 

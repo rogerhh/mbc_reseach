@@ -7,9 +7,10 @@
  *
  ******************************************************************************************/
 
-#include "PREv18.h"
-#include "SNTv4_RF.h"
-#include "mbus.h"
+//#include "../include/PREv18.h"
+#include "../../../pre_v17/software/include/PREv17.h"
+#include "../include/SNTv4_RF.h"
+#include "../include/mbus.h"
 
 // uncomment this for debug mbus message
 //#define DEBUG_MBUS_MSG
@@ -25,14 +26,37 @@
 #define MBUS_DELAY 100      // Amount of delay between successive messages; 100: 6-7ms
 
 // MBC states
-#define MBC_IDLE       0x0
-#define MBC_SNT_LDO    0x1
-#define MBC_TEMP_START 0x2
-#define MBC_TEMP_READ  0x3
-#define MBC_TEMP_END   0x4
+#define MBC_IDLE        0x0
+#define MBC_READY       0x1
+#define MBC_TEMP_READ   0x3
+#define MBC_FLASH_WRITE 0x5
+#define MBC_FLASH_READ  0x6
+
+// GOC states
+#define GOC_IDLE            0x0
+#define GOC_FLASH_WRITE1    0x1
+#define GOC_FLASH_WRITE2    0x2
+#define GOC_FLASH_READ1     0x3
+
+// SNT states
+#define SNT_IDLE        0x0
+#define SNT_TEMP_LDO    0x1
+#define SNT_TEMP_START  0x2
+#define SNT_TEMP_READ   0x3
+
+// FIXME: Make this more versatile
+// FLP states
+#define FLP_OFF     0x0
+#define FLP_ON      0x1
+#define FLP_LOCAL_TO_SRAM   0x2
+#define FLP_SRAM_TO_LOCAL   0x3
+#define FLP_SRAM_TO_FLASH   0x4
+#define FLP_FLASH_TO_SRAM   0x5
+#define FLP_ERASE   0x6
 
 // CP parameters
 #define TIMERWD_VAL 0xFFFFF  // 0xFFFFF about 13 sec with Y5 running default clock (PRCv17)
+// FIXME: Update this
 #define TIMER32_VAL 0x20000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
 
 #define ENUMID 0xDEADBEEF
@@ -46,13 +70,26 @@
 volatile uint32_t enumerated;
 volatile uint32_t wakeup_data;
 volatile uint32_t wfi_timeout_flag;
-volatile uint32_t mbc_state;
+volatile uint32_t flash_addr;
+volatile uint32_t flash_data;
+volatile uint32_t temp_data;
+volatile uint8_t wakeup_data_header;
+volatile uint8_t mbc_state;
+volatile uint8_t goc_state;
+volatile uint8_t snt_state;
+volatile uint8_t flp_state;
+volatile uint8_t temp_data_valid;
+volatile uint8_t sensor_queue;      // [0]: LNT; [1]: SNT; [2]: RDC;
 
 // default register values
+/*
 volatile prev18_r0B_t prev18_r0B = PREv18_R0B_DEFAULT;
 volatile prev18_r19_t prev18_r19 = PREv18_R19_DEFAULT;
 volatile prev18_r1A_t prev18_r1A = PREv18_R1A_DEFAULT;
 volatile prev18_r1C_t prev18_r1C = PREv18_R1C_DEFAULT;
+*/
+
+volatile prev17_r0D_t prev17_r0D = PREv17_R0D_DEFAULT;
 
 volatile sntv4_r00_t sntv4_r00 = SNTv4_R00_DEFAULT;
 volatile sntv4_r01_t sntv4_r01 = SNTv4_R01_DEFAULT;
@@ -64,18 +101,16 @@ volatile sntv4_r07_t sntv4_r07 = SNTv4_R07_DEFAULT;
  **********************************************/
 
 // write to XO driver 0x19
-/*
-void XO_ctrl(uint32_t xo_sleep,
-             uint32_t xo_isolate,
-             uint32_t xo_en_div,
-             uint32_t xo_s,
-             uint32_t xo_sel_cp_div,
-             uint32_t xo_delay_en,
-             uint32_t xo_drv_start_up,
-             uint32_t xo_drv_core,
-             uint32_t xo_rp_low,
-             uint32_t xo_rp_media,
-             uint32_t xo_rp_mvt) {
+void XO_ctrl(uint32_t xo_pulse_sel,
+	     uint32_t xo_delay_en,
+	     uint32_t xo_drv_start_up,
+	     uint32_t xo_drv_core,
+	     uint32_t xo_rp_low,
+	     uint32_t xo_rp_media,
+	     uint32_t xo_rp_mvt,
+	     uint32_t xo_rp_svt,
+	     uint32_t xo_scn_clk_sel,
+	     uint32_t xo_scn_enb) {
             
     *REG_XO_CONTROL = ((xo_pulse_sel     << 11) |
                        (xo_delay_en      << 8)  |
@@ -89,8 +124,8 @@ void XO_ctrl(uint32_t xo_sleep,
                        (xo_scn_enb       << 0));
     mbus_write_message32(0xA1, *REG_XO_CONTROL);
 }
-*/
 
+/*
 void xo_init( void ) {
     // Parasitic capacitance tuning (6 bits for each; each 1 adds 1.8pF)
     uint32_t xo_cap_drv = 0x3F;
@@ -145,7 +180,9 @@ void xo_init( void ) {
     mbus_write_message32(0xBA, 0x03);
 
 }
+*/
 
+/*
 void xo_turn_off( void ) {
     prev18_r19.XO_DRV_CORE = 0x0;
     prev18_r19.XO_SCN_ENB  = 0x1;
@@ -158,8 +195,8 @@ void xo_sleep( void ) {
     prev18_r19.XO_ISOLATE  = 0x1;
     *REG_XO_CONF1 = prev18_r19.as_int;
 }
+*/
 
-/*
 static void XO_div(uint32_t div_val) {
     uint32_t xo_cap_drv = 0x3F; // Additional cap on OSC_DRV
     uint32_t xo_cap_in  = 0x3F; // Additional cap on OSC_IN
@@ -203,7 +240,17 @@ static void XO_init( void ) {
     XO_ctrl(xo_pulse_sel, xo_delay_en, 0, 1, xo_rp_low, xo_rp_media, xo_rp_mvt, xo_rp_svt, 1,
             0); delay(10000); // XO_DRV_START_UP = 0; XO_DRV_CORE = 1; XO_SCN_CLK_SEL = 1
 }
-*/
+
+static void XOT_init(void){
+	mbus_write_message32(0xA0,0x6);
+	*XOT_RESET = 0x1;
+	mbus_write_message32(0xA0,0x7);
+
+	mbus_write_message32(0xA0,*REG_XOT_CONFIG);
+	*REG_XOT_CONFIG = (1 << 16);
+	mbus_write_message32(0xAB,*REG_XOT_CONFIG);
+}
+
 
 /**********************************************
  * Temp sensor functions (SNTv4)
@@ -260,6 +307,64 @@ static void temp_sensor_power_off() {
     mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
 }
 
+static void operation_temp_run() {
+    if(snt_state == SNT_IDLE) {
+        temp_data_valid = 0;
+
+        // Turn on SNT LDO VREF; requires ~30 ms to settle
+        // TODO: Figure out delay time
+        snt_ldo_vref_on();
+        delay(MBUS_DELAY);
+
+        snt_state = SNT_TEMP_LDO;
+
+    }
+    else if(snt_state == SNT_TEMP_LDO) {
+        // Power on SNT LDO
+        snt_ldo_power_on();
+
+        // Power on temp sensor
+        temp_sensor_power_on();
+        delay(MBUS_DELAY);
+
+        snt_state = SNT_TEMP_START;
+    }
+    else if(snt_state == SNT_TEMP_START) {
+        // Use Timer32 as a timeout counter
+        wfi_timeout_flag = 0;
+        config_timer32(TIMER32_VAL, 1, 0, 0); // 1/10 of MBUS watchdog timer default
+        
+        // Start temp sensor
+        temp_sensor_start();
+
+        // Wait for temp sensor output or Timer32
+	WFI();
+
+        // Turn off Timer32
+        *TIMER32_GO = 0;
+
+        snt_state = SNT_TEMP_READ;
+    }
+    else if(snt_state == SNT_TEMP_READ) {
+        if(wfi_timeout_flag) {
+            // if timeout, measure again
+            mbus_write_message32(0xFA, 0xFAFAFAFA);
+	    snt_state = SNT_TEMP_START;
+        }
+        else {
+            // TODO: Verify value measured
+            temp_data = *REG0;
+            temp_data_valid = 1;
+            
+            // Turn off temp sensor and ldo
+            temp_sensor_power_off();
+            snt_ldo_power_off();
+
+            snt_state = SNT_IDLE;
+        }
+    }
+}
+
 /**********************************************
  * Flash Functions
  **********************************************/
@@ -289,10 +394,22 @@ void FLASH_init( void ) {
 
 void FLASH_turn_on() {
     set_halt_until_mbus_trx();
+    mbus_remote_register_write(FLP_ADDR, 0x11, 0x00002F);
+    set_halt_until_mbus_tx();
+
+    if(*REG1 != 0xB5) { flp_fail(1); }
+
+    flp_state = FLP_ON;
+}
+
+void FLASH_turn_off() {
+    set_halt_until_mbus_trx();
     mbus_remote_register_write(FLP_ADDR, 0x11, 0x00002D);
     set_halt_until_mbus_tx();
 
-    if(*REG1 != 0xBB) { flp_fail(1); }
+    if(*REG1 != 0xBB) { flp_fail(2); }
+
+    flp_state = FLP_OFF;
 }
 
 inline void FLASH_write_to_SRAM_bulk(uint32_t* remote_addr, 
@@ -309,36 +426,69 @@ inline void FLASH_read_from_SRAM_bulk(uint32_t* remote_addr,
                                           length_in_words_minus_one);
 }
 
+// REQUIRES: FLASH is turned on
 void copy_mem_from_SRAM_to_FLASH(uint32_t SRAM_addr, 
                                  uint32_t FLASH_addr, 
                                  uint32_t length_in_words_minus_one) {
+    flp_state = FLP_SRAM_TO_FLASH;
+
     mbus_remote_register_write(FLP_ADDR, 0x07, SRAM_addr);
     mbus_remote_register_write(FLP_ADDR, 0x08, FLASH_addr);
+    delay(MBUS_DELAY);
 
     set_halt_until_mbus_trx();
     mbus_remote_register_write(FLP_ADDR, 0x09, (length_in_words_minus_one << 6) |
                                                (0x1 << 5) |
                                                (0x2 << 1) |
-                                               (0x1 << 0));
+                                               (0x1));
     set_halt_until_mbus_tx();
 
     if(*REG1 != 0x00003F) { flp_fail(2); }
 }
 
+// REQUIRES: FLASH is turned on
 void copy_mem_from_FLASH_to_SRAM(uint32_t SRAM_addr, 
                                  uint32_t FLASH_addr,
                                  uint32_t length_in_words_minus_one) {
+    flp_state = FLP_FLASH_TO_SRAM;
+
     mbus_remote_register_write(FLP_ADDR, 0x07, SRAM_addr);
     mbus_remote_register_write(FLP_ADDR, 0x08, FLASH_addr);
+    delay(MBUS_DELAY);
 
     set_halt_until_mbus_trx();
     mbus_remote_register_write(FLP_ADDR, 0x09, (length_in_words_minus_one << 6) |
                                                (0x1 << 5) |
                                                (0x1 << 1) |
-                                               (0x1 << 0));
+                                               (0x1));
     set_halt_until_mbus_tx();
 
     if(*REG1 != 0x00002B) { flp_fail(3); }
+}
+
+// REQUIRES: FLASH is turned on
+void FLASH_erase_page(uint32_t FLASH_addr) {
+    flp_state = FLP_ERASE;
+
+    mbus_remote_register_write(FLP_ADDR, 0x08, FLASH_addr & 0x7F00);
+
+    set_halt_until_mbus_trx();
+    mbus_remote_register_write(FLP_ADDR, 0x09, (0x1 << 5) |
+                                               (0x4 << 1) |
+                                               (0x1));
+    set_halt_until_mbus_tx();
+
+    delay(MBUS_DELAY);
+
+    if(*REG1 != 0x00004F) { flp_fail(4); }
+}
+
+// REQUIRES: FLASH is turned on
+void FLASH_erase_all() {
+    uint32_t i;
+    for(i = 0; i <= 0x7F; ++i) {
+        FLASH_erase_page(i << 8);
+    }
 }
 
 /**********************************************
@@ -362,8 +512,7 @@ void handler_ext_int_wakeup( void ) { // WAKEUP
 
 void handler_ext_int_gocep( void ) { // GOCEP
     *NVIC_ICPR = (0x1 << IRQ_GOCEP);
-    delay(MBUS_DELAY);
-    mbus_write_message32(0xBB, 0x00);
+    mbus_write_message32(0xCC, 0x0);
 }
 
 void handler_ext_int_timer32( void ) { // TIMER32
@@ -374,6 +523,7 @@ void handler_ext_int_timer32( void ) { // TIMER32
 */
     *TIMER32_STAT = 0x0;
     wfi_timeout_flag = 1;
+    mbus_write_message32(0xDD, 0x0);
 }
 
 void handler_ext_int_reg0( void ) { // REG0
@@ -415,6 +565,7 @@ static void operation_sleep_notimer( void ) {
     operation_sleep();
 }
 
+// TEMP WAKEUP TIMER FUNCTION
 void set_wakeup_timer_prev17 ( uint32_t timestamp, uint8_t irq_en, uint8_t reset ){
 	uint32_t regval = timestamp;
 	if( irq_en ) regval |= 0x030000; // IRQ in Sleep-Only
@@ -465,16 +616,31 @@ static void operation_init( void ) {
     // Default CPU halt function
     set_halt_until_mbus_tx();
 
+    // Global variables
     wakeup_data = 0;
     wfi_timeout_flag = 0;
     mbc_state = MBC_IDLE;
+    goc_state = GOC_IDLE;
+    snt_state = SNT_IDLE;
+    flp_state = FLP_OFF;
+
+    temp_data = 0;
+    temp_data_valid = 0;
+
+    sensor_queue = 0;
 
     // BREAKPOINT 0x02
     mbus_write_message32(0xBA, 0x02);
 
-    //xo_init();
 
     // Initialization
+
+    // Set CPU & Mbus Clock Speeds
+    prev17_r0D.SRAM_TUNE_ASO_DLY = 31; // Default 0x0, 5 bits
+    prev17_r0D.SRAM_TUNE_DECODER_DLY = 15; // Default 0x2, 4 bits
+    prev17_r0D.SRAM_USE_INVERTER_SA= 1; 
+    *REG_SRAM_TUNE = prev17_r0D.as_int;
+
     FLASH_init();
     sntv4_r01.TSNS_BURST_MODE = 0;
     sntv4_r01.TSNS_CONT_MODE  = 0;
@@ -484,6 +650,9 @@ static void operation_init( void ) {
     sntv4_r07.TSNS_INT_RPLY_REG_ADDR   = 0x00;
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
     
+    XO_init();
+    XOT_init();
+
     operation_sleep_notimer();
 }
 
@@ -499,14 +668,6 @@ int main() {
     // BREAKPOINT 0x00
     mbus_write_message32(0xBA, 0x00);
 
-//    uint32_t nvic_temp = (1 << IRQ_WAKEUP | 1 << IRQ_GOCEP | 1 << IRQ_TIMER32 | 
-//		  1 << IRQ_REG0 | 1 << IRQ_REG1 | 1 << IRQ_REG2 | 1 << IRQ_REG3);
-//
-//    mbus_write_message32(0xBA, nvic_temp);
-//
-//    *NVIC_ISER = nvic_temp;
-
-
     // Initialization
     if(enumerated != ENUMID) {
         operation_init();
@@ -515,79 +676,141 @@ int main() {
         mbus_write_message32(0xBA, 0x01);
     }
 
-    mbus_write_message32(0xAD, *GOC_DATA_IRQ);
+    // FLASH_turn_on();
+    
+    // check if wakeup is due to GOC
+    if((*SREG_WAKEUP_SOURCE) & 1) {
 
-    // GOCEP triggered wakeup
-    if((*SREG_WAKEUP_SOURCE & 1) == 1)
-    {
-        wakeup_data = *GOC_DATA_IRQ;
-        mbus_write_message32(0xAD, wakeup_data);
-        uint32_t wakeup_data_header = (wakeup_data >> 24) & 0xFF;
-        uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
-        uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
-        uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
-            
+    wakeup_data = *GOC_DATA_IRQ;
+    mbus_write_message32(0xAD, wakeup_data);
+    wakeup_data_header = (wakeup_data >> 24) & 0xFF;
+    // uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
+    // uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
+    // uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
+    if(wakeup_data_header == 0x01) {
+        if(snt_state != SNT_IDLE) { return; }
+
         // For testing
-        if(wakeup_data_header == 0x01) {
-            if(mbc_state == MBC_IDLE) {
-                mbc_state = MBC_SNT_LDO;
+        // Take a manual temp measurement
+        do {
+            operation_temp_run();
+        } while(!temp_data_valid);
+
+        mbus_write_message32(0xAB, temp_data);
+    }
+    else if(wakeup_data_header == 0x02) {
+        if(flp_state != FLP_OFF) { return; }
+
+        // Erase flash
+        FLASH_turn_on();
+        FLASH_erase_all();
+        FLASH_turn_off();
+    }
+    else if(wakeup_data_header == 0x03) {
+        // Store 1 32-bit word in flash
+        // Needs 3 GOCEP interrupts
+	mbus_write_message32(0xED, goc_state);
+        if(goc_state == GOC_IDLE) {
+            flash_addr = wakeup_data & 0x7FFF;
+            goc_state = GOC_FLASH_WRITE1;
+        }
+        else if(goc_state == GOC_FLASH_WRITE1) {
+            flash_data = (wakeup_data & 0xFFFF) << 16;
+            goc_state = GOC_FLASH_WRITE2;
+        }
+        else if(goc_state == GOC_FLASH_WRITE2) {
+            flash_data |= (wakeup_data & 0xFFFF);
+            uint32_t temp_arr[1] = { flash_data };
+
+            if(flp_state == FLP_OFF) {
+                FLASH_turn_on();
+                FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
+                copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
+                FLASH_turn_off();
+
+		mbus_write_message32(0xF1, *temp_arr);
+		mbus_write_message32(0xF1, flash_addr);
             }
+
+            goc_state = GOC_IDLE;
         }
     }
+    else if(wakeup_data_header == 0x04) {
+        // Read an array from flash
+        // Needs 2 GOCEP interrupts
+	mbus_write_message32(0xED, goc_state);
+        if(goc_state == GOC_IDLE) {
+            flash_addr = wakeup_data & 0x7FFF;
+            goc_state = GOC_FLASH_READ1;
+        }
+        else if(goc_state == GOC_FLASH_READ1) {
+            uint32_t len_min_one = wakeup_data & 0xFF;
+            uint32_t temp_arr[256];
+            
+            if(flp_state == FLP_OFF) {
+                FLASH_turn_on();
+                copy_mem_from_FLASH_to_SRAM(0x000, flash_addr, 
+                        		    len_min_one);
+		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, temp_arr,
+					  len_min_one);
+                FLASH_turn_off();
+            }
+            uint32_t i;
+            for(i = 0; i <= len_min_one; ++i) {
+                mbus_write_message32(0xF1, temp_arr[i]);
+            }
+
+            goc_state = GOC_IDLE;
+        }
+    }
+    else if(wakeup_data_header == 0x05) {
+        // Take a temp measurement every 5 secs
+        // Store data into flash after 10 measurements
+        if(goc_state == GOC_IDLE) {
+
+        }
+    }
+
+    }
+
+    // testing
+    mbus_write_message32(0xED, mbc_state);
+    //set_xo_timer(100, 1, 1);
+    set_wakeup_timer_prev17(5, 1, 1);
+    operation_sleep_notimer();
+
+    mbc_state = MBC_READY;
 
     // Finite state machine
     while(1) {
 
     mbus_write_message32(0xED, mbc_state);
     
-    if(mbc_state == MBC_SNT_LDO) {
-        mbc_state = MBC_TEMP_START;
-
-        // Turn on SNT LDO VREF; requires ~30 ms to settle
-        // TODO: Figure out delay time
-        snt_ldo_vref_on();
-        delay(MBUS_DELAY);
-
-        // Power on SNT LDO
-        snt_ldo_power_on();
-
-        // Power on temp sensor
-        temp_sensor_power_on();
-        delay(MBUS_DELAY);
-    }
-    else if(mbc_state == MBC_TEMP_START) {
-        mbc_state = MBC_TEMP_READ;
-
-        // Use Timer32 as a timeout counter
-        wfi_timeout_flag = 0;
-        config_timer32(TIMER32_VAL, 1, 0, 0); // 1/10 of MBUS watchdog timer default
-        
-        // Start temp sensor
-        temp_sensor_start();
-
-        // Wait for temp sensor output or Timer32
-	WFI();
-
-        // Turn off Timer32
-        *TIMER32_GO = 0;
+    if(mbc_state == MBC_READY) {
+        if(sensor_queue & 0b001) {
+            // LNT
+            sensor_queue &= 0b110;
+	    continue;
+        }
+        else if(sensor_queue & 0b010) {
+            mbc_state = MBC_TEMP_READ;
+            sensor_queue &= 0b101;
+	    continue;
+        }
+        else if(sensor_queue & 0b100) {
+            // RDC
+            sensor_queue &= 0b011;
+	    continue;
+        }
+	mbc_state = MBC_IDLE;
     }
     else if(mbc_state == MBC_TEMP_READ) {
-        if(wfi_timeout_flag) {
-            // if timeout, measure again
-	    mbc_state = MBC_TEMP_START;
-            mbus_write_message32(0xFA, 0xFAFAFAFA);
-        }
-        else {
-            mbc_state = MBC_IDLE;
+        do {
+            operation_temp_run();
+        } while(!temp_data_valid);
 
-            // Output measure value for now
-            // TODO: Verify value measured
-            mbus_write_message32(0xAB, *REG0);
-            
-            // Turn off temp sensor and ldo
-            temp_sensor_power_off();
-            snt_ldo_power_off();
-        }
+        mbus_write_message32(0xCC, temp_data);
+	mbc_state = MBC_READY;
     }
     else if(mbc_state == MBC_IDLE) {
         // Go to sleep and wait for next wakeup
@@ -606,12 +829,5 @@ int main() {
     // Should not get here
     operation_sleep_notimer();
 
-    set_wakeup_timer_prev17(10, 1, 1);
-
-    mbus_write_message32(0xAE, 0xDEADBEEF);
-
-    operation_sleep();
-
     while(1);
 }
-

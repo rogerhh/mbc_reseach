@@ -26,13 +26,32 @@
 
 // MBC states
 #define MBC_IDLE        0x0
-#define MBC_SNT_LDO     0x1
-#define MBC_TEMP_START  0x2
+#define MBC_READY       0x1
 #define MBC_TEMP_READ   0x3
-#define MBC_TEMP_END    0x4
-#define MBC_FLASH_WAIT1     0x5
-#define MBC_FLASH_WAIT2     0x6
-#define MBC_TEMP_TEST   0x7
+#define MBC_FLASH_WRITE 0x5
+#define MBC_FLASH_READ  0x6
+
+// GOC states
+#define GOC_IDLE            0x0
+#define GOC_FLASH_WRITE1    0x1
+#define GOC_FLASH_WRITE2    0x2
+#define GOC_FLASH_READ1     0x3
+
+// SNT states
+#define SNT_IDLE        0x0
+#define SNT_TEMP_LDO    0x1
+#define SNT_TEMP_START  0x2
+#define SNT_TEMP_READ   0x3
+
+// FIXME: Make this more versatile
+// FLP states
+#define FLP_OFF     0x0
+#define FLP_ON      0x1
+#define FLP_LOCAL_TO_SRAM   0x2
+#define FLP_SRAM_TO_LOCAL   0x3
+#define FLP_SRAM_TO_FLASH   0x4
+#define FLP_FLASH_TO_SRAM   0x5
+#define FLP_ERASE   0x6
 
 // CP parameters
 #define TIMERWD_VAL 0xFFFFF  // 0xFFFFF about 13 sec with Y5 running default clock (PRCv17)
@@ -49,9 +68,15 @@
 volatile uint32_t enumerated;
 volatile uint32_t wakeup_data;
 volatile uint32_t wfi_timeout_flag;
-volatile uint32_t mbc_state;
 volatile uint32_t flash_addr;
 volatile uint32_t flash_data;
+volatile uint32_t temp_data;
+volatile uint8_t mbc_state;
+volatile uint8_t goc_state;
+volatile uint8_t snt_state;
+volatile uint8_t flp_state;
+volatile uint8_t temp_data_valid;
+volatile uint8_t sensor_queue;      // [0]: LNT; [1]: SNT; [2]: RDC;
 
 // default register values
 volatile prev18_r0B_t prev18_r0B = PREv18_R0B_DEFAULT;
@@ -265,6 +290,64 @@ static void temp_sensor_power_off() {
     mbus_remote_register_write(SNT_ADDR, 1, sntv4_r01.as_int);
 }
 
+static void operation_temp_run() {
+    if(snt_state == SNT_IDLE) {
+        temp_data_valid = 0;
+
+        // Turn on SNT LDO VREF; requires ~30 ms to settle
+        // TODO: Figure out delay time
+        snt_ldo_vref_on();
+        delay(MBUS_DELAY);
+
+        snt_state = SNT_TEMP_LDO;
+
+    }
+    else if(snt_state == SNT_TEMP_LDO) {
+        // Power on SNT LDO
+        snt_ldo_power_on();
+
+        // Power on temp sensor
+        temp_sensor_power_on();
+        delay(MBUS_DELAY);
+
+        snt_state = SNT_TEMP_START;
+    }
+    else if(snt_state == SNT_TEMP_START) {
+        // Use Timer32 as a timeout counter
+        wfi_timeout_flag = 0;
+        config_timer32(TIMER32_VAL, 1, 0, 0); // 1/10 of MBUS watchdog timer default
+        
+        // Start temp sensor
+        temp_sensor_start();
+
+        // Wait for temp sensor output or Timer32
+	WFI();
+
+        // Turn off Timer32
+        *TIMER32_GO = 0;
+
+        snt_state = SNT_TEMP_READ;
+    }
+    else if(snt_state == SNT_TEMP_READ) {
+        if(wfi_timeout_flag) {
+            // if timeout, measure again
+            mbus_write_message32(0xFA, 0xFAFAFAFA);
+	    snt_state = SNT_TEMP_START;
+        }
+        else {
+            // TODO: Verify value measured
+            temp_data = *REG0;
+            temp_data_valid = 1;
+            
+            // Turn off temp sensor and ldo
+            temp_sensor_power_off();
+            snt_ldo_power_off();
+
+            snt_state = SNT_IDLE;
+        }
+    }
+}
+
 /**********************************************
  * Flash Functions
  **********************************************/
@@ -298,6 +381,8 @@ void FLASH_turn_on() {
     set_halt_until_mbus_tx();
 
     if(*REG1 != 0xB5) { flp_fail(1); }
+
+    flp_state = FLP_ON;
 }
 
 void FLASH_turn_off() {
@@ -306,6 +391,8 @@ void FLASH_turn_off() {
     set_halt_until_mbus_tx();
 
     if(*REG1 != 0xBB) { flp_fail(2); }
+
+    flp_state = FLP_OFF;
 }
 
 inline void FLASH_write_to_SRAM_bulk(uint32_t* remote_addr, 
@@ -326,6 +413,8 @@ inline void FLASH_read_from_SRAM_bulk(uint32_t* remote_addr,
 void copy_mem_from_SRAM_to_FLASH(uint32_t SRAM_addr, 
                                  uint32_t FLASH_addr, 
                                  uint32_t length_in_words_minus_one) {
+    flp_state = FLP_SRAM_TO_FLASH;
+
     mbus_remote_register_write(FLP_ADDR, 0x07, SRAM_addr);
     mbus_remote_register_write(FLP_ADDR, 0x08, FLASH_addr);
 
@@ -343,6 +432,8 @@ void copy_mem_from_SRAM_to_FLASH(uint32_t SRAM_addr,
 void copy_mem_from_FLASH_to_SRAM(uint32_t SRAM_addr, 
                                  uint32_t FLASH_addr,
                                  uint32_t length_in_words_minus_one) {
+    flp_state = FLP_FLASH_TO_SRAM;
+
     mbus_remote_register_write(FLP_ADDR, 0x07, SRAM_addr);
     mbus_remote_register_write(FLP_ADDR, 0x08, FLASH_addr);
 
@@ -358,6 +449,8 @@ void copy_mem_from_FLASH_to_SRAM(uint32_t SRAM_addr,
 
 // REQUIRES: FLASH is turned on
 void FLASH_erase_page(uint32_t FLASH_addr) {
+    flp_state = FLP_ERASE;
+
     mbus_remote_register_write(FLP_ADDR, 0x08, FLASH_addr & 0x7F00);
 
     set_halt_until_mbus_trx();
@@ -365,6 +458,8 @@ void FLASH_erase_page(uint32_t FLASH_addr) {
                                                (0x4 << 1) |
                                                (0x1 << 0));
     set_halt_until_mbus_tx();
+
+    delay(MBUS_DELAY);
 
     if(*REG1 != 0x00004F) { flp_fail(4); }
 }
@@ -399,7 +494,91 @@ void handler_ext_int_wakeup( void ) { // WAKEUP
 void handler_ext_int_gocep( void ) { // GOCEP
     *NVIC_ICPR = (0x1 << IRQ_GOCEP);
     delay(MBUS_DELAY);
-    mbus_write_message32(0xBB, 0x00);
+    wakeup_data = *GOC_DATA_IRQ;
+    mbus_write_message32(0xAD, wakeup_data);
+    uint32_t wakeup_data_header = (wakeup_data >> 24) & 0xFF;
+    // uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
+    // uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
+    // uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
+
+    if(wakeup_data_header == 0x01) {
+        if(snt_state != SNT_IDLE) { return; }
+
+        // For testing
+        // Take a manual temp measurement
+        do {
+            operation_temp_run();
+        } while(!temp_data_valid);
+
+        mbus_write_message32(0xAB, temp_data);
+    }
+    else if(wakeup_data_header == 0x02) {
+        if(flp_state != FLP_OFF) { return; }
+
+        // Erase flash
+        FLASH_turn_on();
+        FLASH_erase_all();
+        FLASH_turn_off();
+    }
+    else if(wakeup_data_header == 0x03) {
+        // Store 1 32-bit word in flash
+        // Needs 3 GOCEP interrupts
+        if(goc_state == GOC_IDLE) {
+            flash_addr = wakeup_data & 0x7FFF;
+            goc_state = GOC_FLASH_WRITE1;
+        }
+        else if(goc_state == GOC_FLASH_WRITE1) {
+            flash_data = (wakeup_data & 0xFF) << 8;
+            goc_state = GOC_FLASH_WRITE2;
+        }
+        else if(goc_state == GOC_FLASH_WRITE2) {
+            flash_data |= (wakeup_data & 0xFF);
+            uint32_t temp_arr[1] = { flash_data };
+
+            if(flp_state == FLP_OFF) {
+                FLASH_turn_on();
+                FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
+                copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
+                FLASH_turn_off();
+            }
+
+            goc_state = GOC_IDLE;
+        }
+    }
+    else if(wakeup_data_header == 0x04) {
+        // Read an array from flash
+        // Needs 2 GOCEP interrupts
+        if(goc_state == GOC_IDLE) {
+            flash_addr = wakeup_data & 0x7FFF;
+            goc_state = GOC_FLASH_READ1;
+        }
+        else if(goc_state == GOC_FLASH_READ1) {
+            uint32_t length_in_words_minus_one = wakeup_data & 0xFF;
+            uint32_t temp_arr[256];
+            
+            if(flp_state == FLP_OFF) {
+                FLASH_turn_on();
+                copy_mem_from_FLASH_to_SRAM(flash_addr, 0x000, 
+                        length_in_words_minus_one);
+                mbus_copy_mem_from_remote_to_any_bulk(FLP_ADDR, (uint32_t*) 0x000, PRE_ADDR,
+                        temp_arr, length_in_words_minus_one);
+                FLASH_turn_off();
+            }
+            uint32_t i;
+            for(i = 0; i < length_in_words_minus_one; ++i) {
+                mbus_write_message32(0xF1, temp_arr[i]);
+            }
+
+            goc_state = GOC_IDLE;
+        }
+    }
+    else if(wakeup_data_header == 0x05) {
+        // Take a temp measurement every 5 secs
+        // Store data into flash after 10 measurements
+        if(goc_state == GOC_IDLE) {
+
+        }
+    }
 }
 
 void handler_ext_int_timer32( void ) { // TIMER32
@@ -502,9 +681,18 @@ static void operation_init( void ) {
     // Default CPU halt function
     set_halt_until_mbus_tx();
 
+    // Global variables
     wakeup_data = 0;
     wfi_timeout_flag = 0;
     mbc_state = MBC_IDLE;
+    goc_state = GOC_IDLE;
+    snt_state = SNT_IDLE;
+    flp_state = FLP_OFF;
+
+    temp_data = 0;
+    temp_data_valid = 0;
+
+    sensor_queue = 0;
 
     // BREAKPOINT 0x02
     mbus_write_message32(0xBA, 0x02);
@@ -544,136 +732,33 @@ int main() {
         mbus_write_message32(0xBA, 0x01);
     }
 
-    // GOCEP triggered wakeup
-    if((*SREG_WAKEUP_SOURCE & 1) == 1)
-    {
-        wakeup_data = *GOC_DATA_IRQ;
-        mbus_write_message32(0xAD, wakeup_data);
-        uint32_t wakeup_data_header = (wakeup_data >> 24) & 0xFF;
-        // uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
-        // uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
-        // uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
-            
-        if(wakeup_data_header == 0x01) {
-            // For testing
-            // Take a manual temp measurement
-            if(mbc_state == MBC_IDLE) {
-                mbc_state = MBC_SNT_LDO;
-            }
-        }
-        else if(wakeup_data_header == 0x02) {
-            // Erase flash
-            FLASH_turn_on();
-            FLASH_erase_all();
-            FLASH_turn_off();
-        }
-        else if(wakeup_data_header == 0x03) {
-            // Store 1 32-bit word in flash
-            // Needs 3 GOCEP interrupts
-            if(mbc_state == MBC_IDLE) {
-                mbc_state = MBC_FLASH_WAIT1;
-                flash_addr = wakeup_data & 0x7FFF;
-            }
-            else if(mbc_state == MBC_FLASH_WAIT1) {
-                mbc_state = MBC_FLASH_WAIT2;
-                flash_data = (wakeup_data & 0xFF) << 8;
-            }
-            else if(mbc_state == MBC_FLASH_WAIT2) {
-                mbc_state = MBC_IDLE;
-                flash_data |= (wakeup_data & 0xFF);
-                uint32_t temp_arr[1] = { flash_data };
-                // Using starting address in SRAM
-                FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
-                FLASH_turn_on();
-                copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
-                FLASH_turn_off();
-            }
-        }
-        else if(wakeup_data_header == 0x04) {
-            // Read an array from flash
-            // Needs 2 GOCEP interrupts
-            if(mbc_state == MBC_IDLE) {
-                mbc_state = MBC_FLASH_WAIT1;
-                flash_addr = wakeup_data & 0x7FFF;
-            }
-            else if(MBC_FLASH_WAIT1) {
-                mbc_state = MBC_IDLE;
-                uint32_t length_in_words_minus_one = wakeup_data & 0xFF;
-                FLASH_turn_on();
-                copy_mem_from_FLASH_to_SRAM(flash_addr, 0x000, 
-                                            length_in_words_minus_one);
-                FLASH_turn_off();
-                uint32_t temp_arr[256];
-                mbus_copy_mem_from_remote_to_any_bulk(FLP_ADDR, (uint32_t*) 0x000, PRE_ADDR,
-                                                      temp_arr, length_in_words_minus_one);
-                uint32_t i;
-                for(i = 0; i < length_in_words_minus_one; ++i) {
-                    mbus_write_message32(0xF1, temp_arr[i]);
-                }
-            }
-        }
-        else if(wakeup_data_header == 0x05) {
-            // Take a temp measurement every 5 secs
-            // Store data into flash after 10 measurements
-            if(mbc_state == MBC_IDLE) {
-            
-            }
-        }
-    }
+    mbc_state = MBC_READY;
 
     // Finite state machine
     while(1) {
 
     mbus_write_message32(0xED, mbc_state);
     
-    if(mbc_state == MBC_SNT_LDO) {
-        mbc_state = MBC_TEMP_START;
-
-        // Turn on SNT LDO VREF; requires ~30 ms to settle
-        // TODO: Figure out delay time
-        snt_ldo_vref_on();
-        delay(MBUS_DELAY);
-
-        // Power on SNT LDO
-        snt_ldo_power_on();
-
-        // Power on temp sensor
-        temp_sensor_power_on();
-        delay(MBUS_DELAY);
-    }
-    else if(mbc_state == MBC_TEMP_START) {
-        mbc_state = MBC_TEMP_READ;
-
-        // Use Timer32 as a timeout counter
-        wfi_timeout_flag = 0;
-        config_timer32(TIMER32_VAL, 1, 0, 0); // 1/10 of MBUS watchdog timer default
-        
-        // Start temp sensor
-        temp_sensor_start();
-
-        // Wait for temp sensor output or Timer32
-	WFI();
-
-        // Turn off Timer32
-        *TIMER32_GO = 0;
+    if(mbc_state == MBC_READY) {
+        if(sensor_queue & 0b001) {
+            // LNT
+            sensor_queue &= 0b110;
+        }
+        else if(sensor_queue & 0b010) {
+            mbc_state = MBC_TEMP_READ;
+            sensor_queue &= 0b101;
+        }
+        else if(sensor_queue & 0b100) {
+            // RDC
+            sensor_queue &= 0b011;
+        }
     }
     else if(mbc_state == MBC_TEMP_READ) {
-        if(wfi_timeout_flag) {
-            // if timeout, measure again
-	    mbc_state = MBC_TEMP_START;
-            mbus_write_message32(0xFA, 0xFAFAFAFA);
-        }
-        else {
-            mbc_state = MBC_IDLE;
+        do {
+            operation_temp_run();
+        } while(!temp_data_valid);
 
-            // Output measure value for now
-            // TODO: Verify value measured
-            mbus_write_message32(0xAB, *REG0);
-            
-            // Turn off temp sensor and ldo
-            temp_sensor_power_off();
-            snt_ldo_power_off();
-        }
+        mbus_write_message32(0xCC, temp_data);
     }
     else if(mbc_state == MBC_IDLE) {
         // Go to sleep and wait for next wakeup

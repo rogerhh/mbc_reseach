@@ -37,6 +37,7 @@
 #define GOC_FLASH_WRITE1    0x1
 #define GOC_FLASH_WRITE2    0x2
 #define GOC_FLASH_READ1     0x3
+#define GOC_TEMP_TEST 	    0x4
 
 // SNT states
 #define SNT_IDLE        0x0
@@ -73,6 +74,8 @@ volatile uint32_t wfi_timeout_flag;
 volatile uint32_t flash_addr;
 volatile uint32_t flash_data;
 volatile uint32_t temp_data;
+volatile uint32_t goc_temp_arr[20];
+volatile uint16_t goc_temp_test_count;
 volatile uint8_t wakeup_data_header;
 volatile uint8_t mbc_state;
 volatile uint8_t goc_state;
@@ -247,7 +250,7 @@ static void XOT_init(void){
 	mbus_write_message32(0xA0,0x7);
 
 	mbus_write_message32(0xA0,*REG_XOT_CONFIG);
-	*REG_XOT_CONFIG = (1 << 16);
+	*REG_XOT_CONFIG = (3 << 16);
 	mbus_write_message32(0xAB,*REG_XOT_CONFIG);
 }
 
@@ -488,6 +491,7 @@ void FLASH_erase_all() {
     uint32_t i;
     for(i = 0; i <= 0x7F; ++i) {
         FLASH_erase_page(i << 8);
+	delay(10000);
     }
 }
 
@@ -508,6 +512,12 @@ void handler_ext_int_wakeup( void ) { // WAKEUP
     // Report who woke up
     delay(MBUS_DELAY);
     mbus_write_message32(0xAA, *SREG_WAKEUP_SOURCE);
+
+    if(*SREG_WAKEUP_SOURCE == 2) { // Wakeup timer
+    	if(goc_state == GOC_TEMP_TEST) {
+	    sensor_queue |= 0b010;
+	}
+    }
 }
 
 void handler_ext_int_gocep( void ) { // GOCEP
@@ -650,10 +660,8 @@ static void operation_init( void ) {
     sntv4_r07.TSNS_INT_RPLY_REG_ADDR   = 0x00;
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
     
-    XO_init();
-    XOT_init();
-
-    operation_sleep_notimer();
+    //XO_init();
+    //XOT_init();
 }
 
 /**********************************************
@@ -674,6 +682,8 @@ int main() {
         
         // BREAKPOINT 0x01
         mbus_write_message32(0xBA, 0x01);
+
+	operation_sleep_notimer();
     }
 
     // FLASH_turn_on();
@@ -725,7 +735,11 @@ int main() {
             if(flp_state == FLP_OFF) {
                 FLASH_turn_on();
                 FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
+                FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
                 copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
+		delay(10000);
+		copy_mem_from_FLASH_to_SRAM(0x000, flash_addr, 0);
+                FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
                 FLASH_turn_off();
 
 		mbus_write_message32(0xF1, *temp_arr);
@@ -767,17 +781,26 @@ int main() {
         // Take a temp measurement every 5 secs
         // Store data into flash after 10 measurements
         if(goc_state == GOC_IDLE) {
-
+	    goc_temp_test_count = 0;
+	    goc_state = GOC_TEMP_TEST;
+	    set_wakeup_timer_prev17(10, 1, 1);
+	    operation_sleep();
         }
     }
+
+    mbus_write_message32(0xED, goc_state);
 
     }
 
     // testing
-    mbus_write_message32(0xED, mbc_state);
-    //set_xo_timer(100, 1, 1);
-    set_wakeup_timer_prev17(5, 1, 1);
-    operation_sleep_notimer();
+    // set_xo_timer(0x8000, 1, 1);
+    // set_wakeup_timer_prev17(10, 1, 1);
+    // timer32_config(1000, 1, 0, 0);
+    // mbus_write_message32(0xBC, *REG_XOT_VAL_L);
+    // delay(30000);
+    // mbus_write_message32(0xBC, *REG_WUPT_VAL);
+    // operation_sleep();
+    // while(1);
 
     mbc_state = MBC_READY;
 
@@ -810,12 +833,43 @@ int main() {
         } while(!temp_data_valid);
 
         mbus_write_message32(0xCC, temp_data);
+
+	if(goc_state == GOC_TEMP_TEST) {
+	    mbus_write_message32(0xBC, goc_temp_test_count);
+	    goc_temp_arr[goc_temp_test_count] = temp_data;
+	    ++goc_temp_test_count;
+
+	    if(goc_temp_test_count < 6) {
+		// set_wakeup_timer() NOT WORKING
+	        set_wakeup_timer_prev17(10, 1, 1);
+	    }
+	    else {
+		uint32_t i;
+		for(i = 0; i < 6; i++) {
+			mbus_write_message32(0xEE, goc_temp_arr[i]);
+		}
+		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+	    	FLASH_turn_on();
+		copy_mem_from_SRAM_to_FLASH(0x000, 0x600, 5);
+		delay(10000);
+		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		delay(10000);
+		copy_mem_from_FLASH_to_SRAM(0x000, 0x600, 5);
+		delay(10000);
+		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		delay(10000);
+		FLASH_turn_off();
+		goc_state = GOC_IDLE;
+
+	    }
+	}
+
 	mbc_state = MBC_READY;
     }
     else if(mbc_state == MBC_IDLE) {
         // Go to sleep and wait for next wakeup
         mbus_write_message32(0xAA, 0XAAAAAAAA);
-        operation_sleep_notimer();
+        operation_sleep();
     }
     else {
         // Should not get here

@@ -743,7 +743,9 @@ int main() {
                 FLASH_turn_off();
 
 		mbus_write_message32(0xF1, *temp_arr);
+		delay(MBUS_DELAY);
 		mbus_write_message32(0xF1, flash_addr);
+		delay(MBUS_DELAY);
             }
 
             goc_state = GOC_IDLE;
@@ -786,6 +788,15 @@ int main() {
 	    set_wakeup_timer_prev17(10, 1, 1);
 	    operation_sleep();
         }
+    }
+    // ERASE BEFORE REWRITE
+    else if(wakeup_data_header == 0x06) {
+    	if(flp_state == FLP_OFF) {
+	    flash_addr = wakeup_data & 0x7FFF;
+	    FLASH_turn_on();
+	    FLASH_erase_page(flash_addr);
+	    FLASH_turn_off();
+	}
     }
 
     mbus_write_message32(0xED, goc_state);
@@ -885,3 +896,4 @@ int main() {
 
     while(1);
 }
+

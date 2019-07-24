@@ -660,8 +660,8 @@ static void operation_init( void ) {
     sntv4_r07.TSNS_INT_RPLY_REG_ADDR   = 0x00;
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
     
-    //XO_init();
-    //XOT_init();
+    XO_init();
+    XOT_init();
 }
 
 /**********************************************
@@ -785,7 +785,8 @@ int main() {
         if(goc_state == GOC_IDLE) {
 	    goc_temp_test_count = 0;
 	    goc_state = GOC_TEMP_TEST;
-	    set_wakeup_timer_prev17(10, 1, 1);
+	    //set_wakeup_timer_prev17(10, 1, 1);
+	    set_xo_timer(32900, 1, 1);
 	    operation_sleep();
         }
     }
@@ -804,14 +805,23 @@ int main() {
     }
 
     // testing
-    // set_xo_timer(0x8000, 1, 1);
+    set_xo_timer(0x8888, 1, 1);
+    //mbus_write_message32(0xA0, *REG_XOT_CONFIG);
+    //*REG_XOT_CONFIG = 0x38888;
+    //mbus_write_message32(0xAC, *REG_XOT_CONFIG);
+    //mbus_write_message32(0xAC, *REG_XOT_CONFIGU);
     // set_wakeup_timer_prev17(10, 1, 1);
     // timer32_config(1000, 1, 0, 0);
-    // mbus_write_message32(0xBC, *REG_XOT_VAL_L);
-    // delay(30000);
-    // mbus_write_message32(0xBC, *REG_WUPT_VAL);
-    // operation_sleep();
-    // while(1);
+    //mbus_write_message32(0xBC, *REG_XOT_VAL_L);
+    // delay(1000);
+    //mbus_write_message32(0xBC, *REG_XOT_VAL_U);
+    //mbus_write_message32(0xBC, *XOT_VAL);
+    //*XOT_RESET = 0x01;
+    //mbus_write_message32(0xBC, *REG_XOT_VAL_L);
+    //mbus_write_message32(0xBC, *REG_XOT_VAL_U);
+    //mbus_write_message32(0xBC, *XOT_VAL);
+    //operation_sleep();
+    while(1);
 
     mbc_state = MBC_READY;
 
@@ -852,7 +862,8 @@ int main() {
 
 	    if(goc_temp_test_count < 6) {
 		// set_wakeup_timer() NOT WORKING
-	        set_wakeup_timer_prev17(10, 1, 1);
+	        // set_wakeup_timer_prev17(10, 1, 1);
+		set_xo_timer(32900, 1, 1);
 	    }
 	    else {
 		uint32_t i;

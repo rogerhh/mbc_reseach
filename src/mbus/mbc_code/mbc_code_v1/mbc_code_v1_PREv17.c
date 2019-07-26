@@ -88,15 +88,15 @@ volatile uint32_t temp_data;
 
 volatile uint32_t PMU_ADC_4P2_VAL;
 volatile uint32_t pmu_setting_state;
-volatile uint32_t pmu_neg_10c_threshold_sns;
-volatile uint32_t pmu_0c_threshold_sns;
-volatile uint32_t pmu_10c_threshold_sns;
-volatile uint32_t pmu_20c_threshold_sns;
-volatile uint32_t pmu_25c_threshold_sns;
-volatile uint32_t pmu_35c_threshold_sns;
-volatile uint32_t pmu_55c_threshold_sns;
-volatile uint32_t pmu_75c_threshold_sns;
-volatile uint32_t pmu_95c_threshold_sns;
+volatile uint32_t PMU_neg_10C_threshold_sns;
+volatile uint32_t PMU_0C_threshold_sns;
+volatile uint32_t PMU_10C_threshold_sns;
+volatile uint32_t PMU_20C_threshold_sns;
+volatile uint32_t PMU_25C_threshold_sns;
+volatile uint32_t PMU_35C_threshold_sns;
+volatile uint32_t PMU_55C_threshold_sns;
+volatile uint32_t PMU_75C_threshold_sns;
+volatile uint32_t PMU_95C_threshold_sns;
 
 volatile uint32_t read_data_batadc;
 volatile uint32_t read_data_batadc_diff;
@@ -1005,6 +1005,14 @@ static void operation_init( void ) {
 
     PMU_ADC_4P2_VAL = 0x4B;
 
+    pmu_setting_state = PMU_25C;
+    PMU_10C_threshold_sns =   600;    // Around 10C
+    PMU_20C_threshold_sns =  1000;    // Around 20C
+    PMU_35C_threshold_sns =  2000;    // Around 35C
+    PMU_55C_threshold_sns =  3200;    // Around 55C
+    PMU_75C_threshold_sns =  7000;    // Around 75C
+    PMU_95C_threshold_sns = 12000;    // Around 95C
+
     // BREAKPOINT 0x02
     mbus_write_message32(0xBA, 0x02);
 
@@ -1248,6 +1256,46 @@ int main() {
         } while(!temp_data_valid);
 
         mbus_write_message32(0xCC, temp_data);
+
+        // Read latest PMU ADC measurement
+        pmu_adc_read_latest();
+
+        // Change PMU based on temp
+        if(temp_data > PMU_95C_threshold_sns) {
+            if(pmu_setting_state != PMU_95C) {
+                pmu_setting_state = PMU_95C;
+                pmu_setting_temp_based();
+            }
+        }
+        else if(temp_data > PMU_75C_threshold_sns) {
+            if(pmu_setting_state != PMU_75C) {
+                pmu_setting_state = PMU_75C;
+                pmu_setting_temp_based();
+            }
+        }
+        else if(temp_data > PMU_55C_threshold_sns) {
+            if(pmu_setting_state != PMU_55C) {
+                pmu_setting_state = PMU_55C;
+                pmu_setting_temp_based();
+            }
+        }
+        else if(temp_data < PMU_10C_threshold_sns) {
+            if(pmu_setting_state != PMU_10C) {
+                pmu_setting_state = PMU_10C;
+                pmu_setting_temp_based();
+            }
+        else if(temp_data < PMU_20C_threshold_sns) {
+            if(pmu_setting_state != PMU_20C) {
+                pmu_setting_state = PMU_20C;
+                pmu_setting_temp_based();
+            }
+        }
+        else if(temp_data > PMU_20C_threshold_sns) {
+            if(pmu_setting_state != PMU_25C) {
+                pmu_setting_state = PMU_25C;
+                pmu_setting_temp_based();
+            }
+        }
 
 	if(goc_state == GOC_TEMP_TEST) {
 	    mbus_write_message32(0xBC, goc_temp_test_count);

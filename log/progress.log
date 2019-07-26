@@ -9,3 +9,10 @@ Test GOCEP triggered temp measurement
 
 Jul 15, 2019
 Learn that handler_int_wakeup only applies to wakeup timer
+
+Jul 16, 2019
+Finish GOC design
+Test manual FLP store and retrieve
+
+Jul 22, 2019
+Debug FLP store and retrieve. Flash only writes in one direction 1 -> 0

@@ -67,7 +67,7 @@
 #define PMU_95C 0x6
 
 // CP parameters
-#define TIMERWd_val 0xFFFFF  // 0xFFFFF about 13 sec with Y5 running default clock (PRCv17)
+#define TIMERWD_val 0xFFFFF  // 0xFFFFF about 13 sec with Y5 running default clock (PRCv17)
 // FIXME: Update this
 #define TIMER32_val 0x20000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
 
@@ -238,7 +238,7 @@ static void XO_div(uint32_t div_val) {
 
 static void XO_init( void ) {
     
-    // XO_CLK output pad (0: disabled; 1: 32khz; 2: 16kHz; 3: 8kHz)
+    // XO_CLK output pad (0: disabled; 1: 32kHz; 2: 16kHz; 3: 8kHz)
     uint32_t xot_clk_out_sel = 0x1;
     // Parasitic capacitance tuning (6-bit for each; each one adds 1.8pF)
     uint32_t xo_cap_drv = 0x3f; // additional cap on OSC_DRV
@@ -1284,6 +1284,7 @@ int main() {
                 pmu_setting_state = PMU_10C;
                 pmu_setting_temp_based();
             }
+        }
         else if(temp_data < PMU_20C_threshold_sns) {
             if(pmu_setting_state != PMU_20C) {
                 pmu_setting_state = PMU_20C;

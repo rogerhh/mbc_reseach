@@ -10,7 +10,7 @@
 //#include "../include/PREv18.h"
 #include "../include/PREv17.h"
 #include "../include/SNTv4_RF.h"
-#include "../include/PMUv9_RF.h"
+// #include "../include/PMUv9_RF.h"
 #include "../include/mbus.h"
 
 // uncomment this for debug mbus message
@@ -22,7 +22,7 @@
 #define PRE_ADDR 0x1
 #define SNT_ADDR 0x4
 #define FLP_ADDR 0x5
-#define PMU_ADDR 0x6
+// #define PMU_ADDR 0x6
 
 // Temp sensor parameters
 #define MBUS_DELAY 100      // Amount of delay between successive messages; 100: 6-7ms
@@ -49,6 +49,7 @@
 
 // FIXME: Make this more versatile
 // FLP states
+
 #define FLP_OFF             0x0
 #define FLP_ON              0x1
 #define FLP_LOCAL_TO_SRAM   0x2
@@ -639,7 +640,7 @@ static void pmu_set_sleep_clk(uint8_t r, uint8_t l, uint8_t base, uint8_t l_1p2)
                  (l <<  5) |    // frequency multiplier l (actually l+1)
                  (base)));      // floor frequency base (0-63)
 
-    // Register 0x15: v1p2 sleep
+    // Register 0x15: V1P2 sleep
     pmu_reg_write(0x15,         // PMU_EN_SAR_TRIM_V3_SLEEP
                 ((0 << 19) |    // enable pdm even during periodic reset
                  (0 << 18) |    // enable pfm even when Vref is not used as ref
@@ -984,8 +985,10 @@ static void operation_init( void ) {
     delay(MBUS_DELAY);
     mbus_enumerate(FLP_ADDR);
     delay(MBUS_DELAY);
+    /*
     mbus_enumerate(PMU_ADDR);
     delay(MBUS_DELAY);
+    */
 
     // Default CPU halt function
     set_halt_until_mbus_tx();
@@ -1035,7 +1038,7 @@ static void operation_init( void ) {
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
 
     // PMU initialization
-    pmu_init();
+    // pmu_init();
     
     XO_init();
     XOT_init();
@@ -1179,21 +1182,25 @@ int main() {
 	}
     }
     else if(wakeup_data_header == 0x07) {
+        /*
         pmu_adc_read_latest();
         mbus_write_message32(0xB1, read_data_batadc);
         mbus_write_message32(0xB2, read_data_batadc_diff);
+        */
     }
     else if(wakeup_data_header == 0x08) {
+        /*
         pmu_adc_read_latest();
         mbus_write_message32(0xB1, read_data_batadc);
 
-        // Update 4p2 voltage reference
+        // Update 4P2 voltage reference
         if(wakeup_data_field_0 == 0) {
             PMU_ADC_4P2_VAL = read_data_batadc;
         }
         else {
             PMU_ADC_4P2_VAL = wakeup_data_field_0;
         }
+        */
     }
 
     mbus_write_message32(0xE2, goc_state);

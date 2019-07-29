@@ -5,12 +5,13 @@
  ******************************************************************************************
  * v1: draft version; not tested on chip
  *
+ * PMUv9 version: with PMUv9
  ******************************************************************************************/
 
 //#include "../include/PREv18.h"
 #include "../include/PREv17.h"
 #include "../include/SNTv4_RF.h"
-// #include "../include/PMUv9_RF.h"
+#include "../include/PMUv9_RF.h"
 #include "../include/mbus.h"
 
 // uncomment this for debug mbus message
@@ -22,7 +23,7 @@
 #define PRE_ADDR 0x1
 #define SNT_ADDR 0x4
 #define FLP_ADDR 0x5
-// #define PMU_ADDR 0x6
+#define PMU_ADDR 0x6
 
 // Temp sensor parameters
 #define MBUS_DELAY 100      // Amount of delay between successive messages; 100: 6-7ms
@@ -111,6 +112,7 @@ volatile uint8_t snt_state;
 volatile uint8_t flp_state;
 volatile uint8_t temp_data_valid;
 volatile uint8_t sensor_queue;      // [0]: lnt; [1]: SNT; [2]: RDC;
+volatile uint8_t goc_temp_test_len;
 
 // default register values
 /*
@@ -457,7 +459,7 @@ inline void FLASH_read_from_SRAM_bulk(uint32_t* remote_addr,
                                           length_in_words_minus_one);
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void copy_mem_from_SRAM_to_FLASH(uint32_t sram_addr, 
                                  uint32_t flash_addr, 
                                  uint32_t length_in_words_minus_one) {
@@ -477,7 +479,7 @@ void copy_mem_from_SRAM_to_FLASH(uint32_t sram_addr,
     if(*REG1 != 0x00003F) { flp_fail(2); }
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void copy_mem_from_FLASH_to_SRAM(uint32_t sram_addr, 
                                  uint32_t flash_addr,
                                  uint32_t length_in_words_minus_one) {
@@ -497,7 +499,7 @@ void copy_mem_from_FLASH_to_SRAM(uint32_t sram_addr,
     if(*REG1 != 0x00002B) { flp_fail(3); }
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void FLASH_erase_page(uint32_t flash_addr) {
     flp_state = FLP_ERASE;
 
@@ -514,7 +516,7 @@ void FLASH_erase_page(uint32_t flash_addr) {
     if(*REG1 != 0x00004F) { flp_fail(4); }
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void FLASH_erase_all() {
     uint32_t i;
     for(i = 0; i <= 0x7F; ++i) {
@@ -984,10 +986,8 @@ static void operation_init( void ) {
     delay(MBUS_DELAY);
     mbus_enumerate(FLP_ADDR);
     delay(MBUS_DELAY);
-    /*
     mbus_enumerate(PMU_ADDR);
     delay(MBUS_DELAY);
-    */
 
     // Default CPU halt function
     set_halt_until_mbus_tx();
@@ -1037,7 +1037,7 @@ static void operation_init( void ) {
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
 
     // PMU initialization
-    // pmu_init();
+    pmu_init();
     
     XO_init();
     XOT_init();
@@ -1164,6 +1164,7 @@ int main() {
         // Take a temp measurement every 5 secs
         // Store data into flash after 10 measurements
         if(goc_state == GOC_IDLE) {
+            goc_temp_test_len = wakeup_data & 0xFF;
 	    goc_temp_test_count = 0;
 	    goc_state = GOC_TEMP_TEST;
 	    //set_wakeup_timer_prev17(10, 1, 1);
@@ -1181,14 +1182,11 @@ int main() {
 	}
     }
     else if(wakeup_data_header == 0x07) {
-        /*
         pmu_adc_read_latest();
         mbus_write_message32(0xB1, read_data_batadc);
         mbus_write_message32(0xB2, read_data_batadc_diff);
-        */
     }
     else if(wakeup_data_header == 0x08) {
-        /*
         pmu_adc_read_latest();
         mbus_write_message32(0xB1, read_data_batadc);
 
@@ -1199,7 +1197,6 @@ int main() {
         else {
             PMU_ADC_4P2_VAL = wakeup_data_field_0;
         }
-        */
     }
 
     mbus_write_message32(0xE2, goc_state);
@@ -1233,36 +1230,8 @@ int main() {
 
     mbc_state = MBC_READY;
 
-        // Erase flash
-        FLASH_turn_on();
-        FLASH_erase_all();
-        FLASH_turn_off();
-    }
-    else if(wakeup_data_header == 0x03) {
-        // Store 1 32-bit word in flash
-        // Needs 3 GOCEP interrupts
-	mbus_write_message32(0xED, goc_state);
-        if(goc_state == GOC_IDLE) {
-            flash_addr = wakeup_data & 0x7FFF;
-            goc_state = GOC_FLASH_WRITE1;
-        }
-        else if(goc_state == GOC_FLASH_WRITE1) {
-            flash_data = (wakeup_data & 0xFFFF) << 16;
-            goc_state = GOC_FLASH_WRITE2;
-        }
-        else if(goc_state == GOC_FLASH_WRITE2) {
-            flash_data |= (wakeup_data & 0xFFFF);
-            uint32_t temp_arr[1] = { flash_data };
-
-            if(flp_state == FLP_OFF) {
-                FLASH_turn_on();
-                FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
-                copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
-                FLASH_turn_off();
-
-		mbus_write_message32(0xF1, *temp_arr);
-		mbus_write_message32(0xF1, flash_addr);
-            }
+    // Finite state machine
+    while(1) {
 
     mbus_write_message32(0xED, mbc_state);
     
@@ -1337,26 +1306,28 @@ int main() {
 	    goc_temp_arr[goc_temp_test_count] = temp_data;
 	    ++goc_temp_test_count;
 
-	    if(goc_temp_test_count < 6) {
+	    if(goc_temp_test_count < goc_temp_test_len) {
 		// set_wakeup_timer() NOT WORKING
 	        // set_wakeup_timer_prev17(10, 1, 1);
 		set_xo_timer(32900, 1, 1);
 	    }
 	    else {
 		uint32_t i;
-		for(i = 0; i < 6; i++) {
+		for(i = 0; i < goc_temp_test_len; i++) {
 			mbus_write_message32(0xEE, goc_temp_arr[i]);
 		}
-		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
 	    	FLASH_turn_on();
-		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, 5);
+		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, goc_temp_test_len - 1);
+                /*
 		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
 		delay(10000);
 		copy_mem_from_FLASH_to_SRAM(0x000, 0x000, 5);
 		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
 		delay(10000);
+                */
 		FLASH_turn_off();
 		goc_state = GOC_IDLE;
 
@@ -1384,3 +1355,4 @@ int main() {
 
     while(1);
 }
+

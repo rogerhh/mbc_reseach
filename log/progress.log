@@ -1,2 +1,18 @@
 Jul 10, 2019
 Finish operation_init(); finish temp sensor functions; set up gocep for manual temp measurement
+
+Jul 12, 2019
+Read Motus paper and monarch tracking paper
+
+Jul 13, 2019
+Test GOCEP triggered temp measurement
+
+Jul 15, 2019
+Learn that handler_int_wakeup only applies to wakeup timer
+
+Jul 16, 2019
+Finish GOC design
+Test manual FLP store and retrieve
+
+Jul 22, 2019
+Debug FLP store and retrieve. Flash only writes in one direction 1 -> 0

@@ -112,6 +112,7 @@ volatile uint8_t snt_state;
 volatile uint8_t flp_state;
 volatile uint8_t temp_data_valid;
 volatile uint8_t sensor_queue;      // [0]: lnt; [1]: SNT; [2]: RDC;
+volatile uint8_t goc_temp_test_len;
 
 // default register values
 /*
@@ -1163,6 +1164,7 @@ int main() {
         // Take a temp measurement every 5 secs
         // Store data into flash after 10 measurements
         if(goc_state == GOC_IDLE) {
+            goc_temp_test_len = wakeup_data & 0xFF;
 	    goc_temp_test_count = 0;
 	    goc_state = GOC_TEMP_TEST;
 	    //set_wakeup_timer_prev17(10, 1, 1);
@@ -1304,26 +1306,28 @@ int main() {
 	    goc_temp_arr[goc_temp_test_count] = temp_data;
 	    ++goc_temp_test_count;
 
-	    if(goc_temp_test_count < 6) {
+	    if(goc_temp_test_count < goc_temp_test_len) {
 		// set_wakeup_timer() NOT WORKING
 	        // set_wakeup_timer_prev17(10, 1, 1);
 		set_xo_timer(32900, 1, 1);
 	    }
 	    else {
 		uint32_t i;
-		for(i = 0; i < 6; i++) {
+		for(i = 0; i < goc_temp_test_len; i++) {
 			mbus_write_message32(0xEE, goc_temp_arr[i]);
 		}
-		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
 	    	FLASH_turn_on();
-		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, 5);
+		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, goc_temp_test_len - 1);
+                /*
 		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
 		delay(10000);
 		copy_mem_from_FLASH_to_SRAM(0x000, 0x000, 5);
 		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
+		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
 		delay(10000);
+                */
 		FLASH_turn_off();
 		goc_state = GOC_IDLE;
 

@@ -861,6 +861,8 @@ int get_weather_data(std::vector<WeatherData>& v,
             std::string str, source = std::string(data.contents);
             get_string(str, source, "\"data\":[", lastpos);
 
+            uint32_t download_count = 0;
+
             while(get_string(str, source, "{", lastpos))
             {
                 WeatherData weatherdata;
@@ -878,17 +880,17 @@ int get_weather_data(std::vector<WeatherData>& v,
                         = (str != "null")? std::stod(str) : -1000;
                 }
 
-                if(get_string(str, source, "\"slp\":", lastpos))
-                {
-                    get_string(str, source, ",", lastpos);
-                    weatherdata.data[WeatherData::SEA_LEVEL_PRESSURE]
-                        = (str != "null")? std::stod(str) : -1000;
-                }
-
                 if(get_string(str, source, "\"vis\":", lastpos))
                 {
                     get_string(str, source, ",", lastpos);
                     weatherdata.data[WeatherData::VISIBILITY]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"slp\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SEA_LEVEL_PRESSURE]
                         = (str != "null")? std::stod(str) : -1000;
                 }
 
@@ -897,6 +899,20 @@ int get_weather_data(std::vector<WeatherData>& v,
                     get_string(str, source, ",", lastpos);
                     weatherdata.data[WeatherData::PART_OF_THE_DAY]
                         = (str == "\"d\"")? 1 : 0;
+                }
+
+                if(get_string(str, source, "\"dni\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::DNI]
+                        = (str != "null")? std::stod(str) : -1000;
+                }
+
+                if(get_string(str, source, "\"elev_angle\":", lastpos))
+                {
+                    get_string(str, source, ",", lastpos);
+                    weatherdata.data[WeatherData::SOLAR_ELEVATION_ANGLE]
+                        = (str != "null")? std::stod(str) : -1000;
                 }
 
                 if(get_string(str, source, "\"pres\":", lastpos))
@@ -934,13 +950,6 @@ int get_weather_data(std::vector<WeatherData>& v,
                         = (str != "null")? std::stod(str) : -1000;
                 }
 
-                if(get_string(str, source, "\"elev_angle\":", lastpos))
-                {
-                    get_string(str, source, ",", lastpos);
-                    weatherdata.data[WeatherData::SOLAR_ELEVATION_ANGLE]
-                        = (str != "null")? std::stod(str) : -1000;
-                }
-
                 if(get_string(str, source, "\"wind_dir\":", lastpos))
                 {
                     get_string(str, source, ",", lastpos);
@@ -966,13 +975,6 @@ int get_weather_data(std::vector<WeatherData>& v,
                 {
                     get_string(str, source, ",", lastpos);
                     weatherdata.data[WeatherData::DHI]
-                        = (str != "null")? std::stod(str) : -1000;
-                }
-
-                if(get_string(str, source, "\"dni\":", lastpos))
-                {
-                    get_string(str, source, ",", lastpos);
-                    weatherdata.data[WeatherData::DNI]
                         = (str != "null")? std::stod(str) : -1000;
                 }
 
@@ -1015,6 +1017,13 @@ int get_weather_data(std::vector<WeatherData>& v,
                 weatherdata.data[WeatherData::LONGITUDE] = longitude;
 
                 weather_v.emplace_back(weatherdata);
+
+                download_count++;
+            }
+
+            std::cout << "Downloaded " << download_count << " data points.\n";
+            if(download_count != 168) {
+                std::cout << "WARNING: did not download hourly data for 7 days. Order of curl data may be altered. Integrity of data may be compromised. Contact Roger at rogerhh@umich.edu\n";
             }
 
             // begin storing data
@@ -1047,7 +1056,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                                      std::to_string(i.data[WeatherData::SOLAR_ELEVATION_ANGLE]).c_str(),
                                      std::to_string(i.data[WeatherData::SOLAR_AZIMUTH_ANGLE]).c_str(),
                                      std::to_string(i.data[WeatherData::SOLAR_HOUR_ANGLE]).c_str());
-                // std::cout << sql << "\n";
+                std::cout << sql << "\n";
                 rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
             }
 

@@ -1169,9 +1169,9 @@ int main() {
 	    goc_temp_test_count = 0;
 	    goc_state = GOC_TEMP_TEST;
 	    //set_wakeup_timer_prev17(10, 1, 1);
-	    //set_xo_timer(32900, 1, 1);
-	    *REG_XOT_CONFIG = 0x38084;
-	    *XOT_RESET = 0x1;
+	    set_xo_timer(32900, 1, 1);
+	    //*REG_XOT_CONFIG = 0x38084;
+	    //*XOT_RESET = 0x1;
 	    operation_sleep();
         }
     }
@@ -1356,3 +1356,4 @@ int main() {
 
     while(1);
 }
+

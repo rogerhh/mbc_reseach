@@ -22,7 +22,7 @@
 #define PRE_ADDR 0x1
 #define SNT_ADDR 0x4
 #define FLP_ADDR 0x5
-// #define PMU_ADDR 0x6
+#define PMU_ADDR 0x6
 
 // Temp sensor parameters
 #define MBUS_DELAY 100      // Amount of delay between successive messages; 100: 6-7ms
@@ -277,9 +277,11 @@ static void XOT_init(void){
 	*XOT_RESET = 0x1;
 	mbus_write_message32(0xA0,0x7);
 
+	/*
 	mbus_write_message32(0xA0,*REG_XOT_CONFIG);
 	*REG_XOT_CONFIG = (3 << 16);
 	mbus_write_message32(0xAB,*REG_XOT_CONFIG);
+	*/
 }
 
 
@@ -1167,7 +1169,9 @@ int main() {
 	    goc_temp_test_count = 0;
 	    goc_state = GOC_TEMP_TEST;
 	    //set_wakeup_timer_prev17(10, 1, 1);
-	    set_xo_timer(32900, 1, 1);
+	    //set_xo_timer(32900, 1, 1);
+	    *REG_XOT_CONFIG = 0x38084;
+	    *XOT_RESET = 0x1;
 	    operation_sleep();
         }
     }
@@ -1206,7 +1210,7 @@ int main() {
 
     }
 
-    if(*SREG_WAKEUP_SOURCE == 2) { // Wakeup timer
+    if(*SREG_WAKEUP_SOURCE == 4) { // XO timer
     	if(goc_state == GOC_TEMP_TEST) {
 	    sensor_queue |= 0b010;
 	}
@@ -1216,6 +1220,7 @@ int main() {
     //set_xo_timer(0x8888, 1, 1);
     //mbus_write_message32(0xA0, *REG_XOT_CONFIG);
     //*REG_XOT_CONFIG = 0x38888;
+    //*XOT_RESET = 0x1;
     //mbus_write_message32(0xAC, *REG_XOT_CONFIG);
     //mbus_write_message32(0xAC, *REG_XOT_CONFIGU);
     // set_wakeup_timer_prev17(10, 1, 1);
@@ -1233,36 +1238,7 @@ int main() {
 
     mbc_state = MBC_READY;
 
-        // Erase flash
-        FLASH_turn_on();
-        FLASH_erase_all();
-        FLASH_turn_off();
-    }
-    else if(wakeup_data_header == 0x03) {
-        // Store 1 32-bit word in flash
-        // Needs 3 GOCEP interrupts
-	mbus_write_message32(0xED, goc_state);
-        if(goc_state == GOC_IDLE) {
-            flash_addr = wakeup_data & 0x7FFF;
-            goc_state = GOC_FLASH_WRITE1;
-        }
-        else if(goc_state == GOC_FLASH_WRITE1) {
-            flash_data = (wakeup_data & 0xFFFF) << 16;
-            goc_state = GOC_FLASH_WRITE2;
-        }
-        else if(goc_state == GOC_FLASH_WRITE2) {
-            flash_data |= (wakeup_data & 0xFFFF);
-            uint32_t temp_arr[1] = { flash_data };
-
-            if(flp_state == FLP_OFF) {
-                FLASH_turn_on();
-                FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
-                copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
-                FLASH_turn_off();
-
-		mbus_write_message32(0xF1, *temp_arr);
-		mbus_write_message32(0xF1, flash_addr);
-            }
+    while(1) {
 
     mbus_write_message32(0xED, mbc_state);
     
@@ -1291,8 +1267,9 @@ int main() {
 
         mbus_write_message32(0xCC, temp_data);
 
+	/*
         // Read latest PMU ADC measurement
-        pmu_adc_read_latest();
+	pmu_adc_read_latest();
 
         // Change PMU based on temp
         if(temp_data > PMU_95C_threshold_sns) {
@@ -1331,6 +1308,7 @@ int main() {
                 pmu_setting_temp_based();
             }
         }
+	*/
 
 	if(goc_state == GOC_TEMP_TEST) {
 	    mbus_write_message32(0xBC, goc_temp_test_count);
@@ -1349,14 +1327,8 @@ int main() {
 		}
 		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
 	    	FLASH_turn_on();
+		FLASH_erase_page(0x000);
 		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, 5);
-		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
-		delay(10000);
-		copy_mem_from_FLASH_to_SRAM(0x000, 0x000, 5);
-		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
-		delay(10000);
 		FLASH_turn_off();
 		goc_state = GOC_IDLE;
 

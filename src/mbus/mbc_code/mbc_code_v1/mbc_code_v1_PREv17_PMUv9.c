@@ -406,6 +406,7 @@ static void operation_temp_run() {
     else if(snt_state == SNT_SET_PMU) {
         temp_data_valid = 1;
 
+	/*
         // Read latest PMU ADC measurement
         pmu_adc_read_latest();
 
@@ -448,6 +449,7 @@ static void operation_temp_run() {
                 pmu_setting_temp_based();
             }
         }
+	*/
 
 	snt_state = SNT_IDLE;
     }
@@ -1332,22 +1334,21 @@ int main() {
 		for(i = 0; i < goc_temp_test_len; i++) {
 			mbus_write_message32(0xEE, goc_temp_arr[i]);
 		}
-		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
 	    	FLASH_turn_on();
-		delay(10000);
 		FLASH_erase_page(0x000);
-		delay(10000);
+		FLASH_turn_off();
+	    	FLASH_turn_on();
+		// delay(60000);
+		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
+		// delay(10000);
+		// FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
+		// delay(10000);
 		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, goc_temp_test_len - 1);
-		delay(10000);
-                /*
-		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
-		delay(10000);
-		copy_mem_from_FLASH_to_SRAM(0x000, 0x000, 5);
-		delay(10000);
-		FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
-		delay(10000);
-                */
+		// delay(10000);
+		//copy_mem_from_FLASH_to_SRAM(0x000, 0x000, goc_temp_test_len - 1);
+		//delay(10000);
+		//FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
+		//delay(10000);
 		FLASH_turn_off();
 		goc_state = GOC_IDLE;
 

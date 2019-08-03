@@ -413,42 +413,29 @@ static void operation_temp_run() {
 	mbus_write_message32(0xDD, 0xBB);
 
         // Change PMU based on temp
+	// code to save space
+	uint32_t last_pmu_state = pmu_setting_state;
         if(temp_data > PMU_95C_threshold_sns) {
-            if(pmu_setting_state != PMU_95C) {
-                pmu_setting_state = PMU_95C;
-                pmu_setting_temp_based();
-            }
+            pmu_setting_state = PMU_95C;
         }
         else if(temp_data > PMU_75C_threshold_sns) {
-            if(pmu_setting_state != PMU_75C) {
-                pmu_setting_state = PMU_75C;
-                pmu_setting_temp_based();
-            }
+            pmu_setting_state = PMU_75C;
         }
         else if(temp_data > PMU_55C_threshold_sns) {
-            if(pmu_setting_state != PMU_55C) {
-                pmu_setting_state = PMU_55C;
-                pmu_setting_temp_based();
-            }
+            pmu_setting_state = PMU_55C;
         }
         else if(temp_data < PMU_10C_threshold_sns) {
-            if(pmu_setting_state != PMU_10C) {
-                pmu_setting_state = PMU_10C;
-                pmu_setting_temp_based();
-            }
+            pmu_setting_state = PMU_10C;
         }
         else if(temp_data < PMU_20C_threshold_sns) {
-            if(pmu_setting_state != PMU_20C) {
-                pmu_setting_state = PMU_20C;
-                pmu_setting_temp_based();
-            }
+            pmu_setting_state = PMU_20C;
         }
         else if(temp_data > PMU_20C_threshold_sns) {
-            if(pmu_setting_state != PMU_25C) {
-                pmu_setting_state = PMU_25C;
-                pmu_setting_temp_based();
-            }
+            pmu_setting_state = PMU_25C;
         }
+	if(last_pmu_state != pmu_setting_state) {
+	    pmu_setting_temp_based();
+	}
 	*/
 
 	snt_state = SNT_IDLE;
@@ -731,8 +718,13 @@ inline static void pmu_setting_temp_based() {
         pmu_set_active_clk(0xD, 0x2, 0x10, 0x4/*V1P2*/);
         pmu_set_sleep_clk(0xF, 0x1, 0x1, 0x2/*V1P2*/);
     }
+    else if(pmu_setting_state == PMU_20C) {
+    	pmu_set_active_clk(0x7, 0x2, 0x10, 0x4/*V1P2*/);
+	pmu_set_sleep_clk(0xF, 0x2, 0x1, 0x4/*V1P2*/);
+    }
     else if(pmu_setting_state == PMU_25C) {
         pmu_set_active_clk(0x5, 0x1, 0x10, 0x2/*V1P2*/);
+        // pmu_set_active_clk(0x2, 0x1, 0x10, 0x2/*V1P2*/);
         pmu_set_sleep_low();
     }
     else if(pmu_setting_state == PMU_35C) {
@@ -754,8 +746,6 @@ inline static void pmu_setting_temp_based() {
 }
 
 inline static void pmu_set_clk_init() {
-    // FIXME: set this to 25C
-    pmu_setting_state = PMU_35C;
     pmu_setting_temp_based();
     // Use the new reset scheme in PMUv3
     pmu_reg_write(0x05,         // PMU_EN_SAR_RATIO_OVERRIDE; default: 12'h000
@@ -1065,6 +1055,7 @@ static void operation_init( void ) {
 
     PMU_ADC_4P2_VAL = 0x4B;
 
+    // 35C works for now
     pmu_setting_state = PMU_25C;
     PMU_10C_threshold_sns =   600;    // Around 10C
     PMU_20C_threshold_sns =  1000;    // Around 20C
@@ -1255,6 +1246,11 @@ int main() {
         else {
             PMU_ADC_4P2_VAL = wakeup_data_field_0;
         }
+    }
+    else if(wakeup_data_header == 0x09) {
+    	pmu_setting_state = wakeup_data_field_0 & 0x7;
+	pmu_setting_temp_based();
+	FLASH_init();
     }
 
     mbus_write_message32(0xE2, goc_state);

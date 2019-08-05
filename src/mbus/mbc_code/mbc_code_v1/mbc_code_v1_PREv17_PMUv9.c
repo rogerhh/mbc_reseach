@@ -621,14 +621,14 @@ static void pmu_set_active_clk(uint8_t r, uint8_t l, uint8_t base, uint8_t l_1p2
                 ((3 << 14) |    // desired vout/vin ratio; default: 0
                  (0 << 13) |    // enable main feedback loop
                  (r <<  9) |    // frequency multiplier r
-                 (l <<  5) |    // frequency multiplier l
+                 (l <<  5) |    // frequency multiplier l (l+1)
                  (base)));      // floor frequency base (0-63)
 
     // Register 0x1a: V0P6 ACTIVE
     pmu_reg_write(0x1A,         // PMU_EN_DOWNCONVERTER_TRIM_V3_ACTIVE
                 ((0 << 13) |    // enable main feedback loop
                  (r <<  9) |    // frequency multiplier r
-                 (l <<  5) |    // frequency multiplier l
+                 (l <<  5) |    // frequency multiplier l (l+1)
                  (base)));      // floor frequency base (0-63)
 }
 
@@ -668,6 +668,7 @@ inline static void pmu_set_sleep_low() {
     pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
 }
 
+// increase sourcemeter current limit
 inline static void pmu_setting_temp_based() {
     mbus_write_message32(0xB7, pmu_setting_state);
     if(pmu_setting_state == PMU_10C) {

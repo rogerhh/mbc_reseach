@@ -665,14 +665,14 @@ static void pmu_set_active_clk(uint8_t r, uint8_t l, uint8_t base, uint8_t l_1p2
                 ((3 << 14) |    // desired vout/vin ratio; default: 0
                  (0 << 13) |    // enable main feedback loop
                  (r <<  9) |    // frequency multiplier r
-                 (l <<  5) |    // frequency multiplier l (l+1)
+                 (l <<  5) |    // frequency multiplier l
                  (base)));      // floor frequency base (0-63)
 
     // Register 0x1a: V0P6 ACTIVE
     pmu_reg_write(0x1A,         // PMU_EN_DOWNCONVERTER_TRIM_V3_ACTIVE
                 ((0 << 13) |    // enable main feedback loop
                  (r <<  9) |    // frequency multiplier r
-                 (l <<  5) |    // frequency multiplier l (l+1)
+                 (l <<  5) |    // frequency multiplier l
                  (base)));      // floor frequency base (0-63)
 }
 
@@ -704,7 +704,7 @@ static void pmu_set_sleep_clk(uint8_t r, uint8_t l, uint8_t base, uint8_t l_1p2)
                  (base)));      // floor frequency base (0-63)
 }
 
-inline static void pmu_set_sllep_radio() {
+inline static void pmu_set_sleep_radio() {
     pmu_set_sleep_clk(0xF, 0xA, 0x5, 0xF/*V1P2*/);
 }
 
@@ -712,8 +712,57 @@ inline static void pmu_set_sleep_low() {
     pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
 }
 
-// increase sourcemeter current limit
-inline static void pmu_setting_temp_based() {
+static void pmu_setting_temp_based_with_active_r(uint8_t r) {
+    mbus_write_message32(0xB7, pmu_setting_state);
+    if(pmu_setting_state == PMU_10C) {
+        pmu_set_active_clk(r, 0x2, 0x10, 0x4/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_20C) {
+    	pmu_set_active_clk(r, 0x2, 0x10, 0x4/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_25C) {
+        pmu_set_active_clk(r, 0x1, 0x10, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_35C) {
+        pmu_set_active_clk(r, 0x1, 0x10, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_55C) {
+        pmu_set_active_clk(r, 0x0, 0x10, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_75C) {
+        pmu_set_active_clk(r, 0x4, 0x7, 0x8/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_95C) {
+        pmu_set_active_clk(r, 0x2, 0x7, 0x4/*V1P2*/);
+    }
+}
+
+static void pmu_setting_temp_based_with_sleep_r(uint8_t r) {
+    mbus_write_message32(0xB7, pmu_setting_state);
+    if(pmu_setting_state == PMU_10C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_20C) {
+	pmu_set_sleep_clk(r, 0x2, 0x1, 0x4/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_25C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_35C) {
+        pmu_set_sleep_clk(r, 0x0, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_55C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_75C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_95C) {
+        pmu_set_sleep_clk(r, 0x0, 0x1, 0x0/*V1P2*/);
+    }
+}
+
+static void pmu_setting_temp_based() {
     mbus_write_message32(0xB7, pmu_setting_state);
     if(pmu_setting_state == PMU_10C) {
         pmu_set_active_clk(0xD, 0x2, 0x10, 0x4/*V1P2*/);
@@ -725,7 +774,7 @@ inline static void pmu_setting_temp_based() {
     }
     else if(pmu_setting_state == PMU_25C) {
         pmu_set_active_clk(0x5, 0x1, 0x10, 0x2/*V1P2*/);
-        // pmu_set_active_clk(0x2, 0x1, 0x10, 0x2/*V1P2*/);
+        // pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
         pmu_set_sleep_low();
     }
     else if(pmu_setting_state == PMU_35C) {
@@ -1065,9 +1114,6 @@ static void operation_init( void ) {
     PMU_75C_threshold_sns =  7000;    // Around 75C
     PMU_95C_threshold_sns = 12000;    // Around 95C
 
-    // BREAKPOINT 0x02
-    mbus_write_message32(0xBA, 0x02);
-
 
     // Initialization
 
@@ -1076,6 +1122,9 @@ static void operation_init( void ) {
     prev17_r0D.SRAM_TUNE_DECODER_DLY = 15; // Default 0x2, 4 bits
     prev17_r0D.SRAM_USE_INVERTER_SA= 1; 
     *REG_SRAM_TUNE = prev17_r0D.as_int;
+
+    // BREAKPOINT 0x02
+    mbus_write_message32(0xBA, 0x02);
 
     FLASH_init();
     sntv4_r01.TSNS_BURST_MODE = 0;
@@ -1124,7 +1173,7 @@ int main() {
     mbus_write_message32(0xAD, wakeup_data);
     wakeup_data_header = (wakeup_data >> 24) & 0xFF;
     uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
-    // uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
+    uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
     // uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
     if(wakeup_data_header == 0x01) {
         if(snt_state == SNT_IDLE) {
@@ -1251,7 +1300,19 @@ int main() {
     else if(wakeup_data_header == 0x09) {
     	pmu_setting_state = wakeup_data_field_0 & 0x7;
 	pmu_setting_temp_based();
-	FLASH_init();
+	// FLASH_init();
+    }
+    else if(wakeup_data_header == 0x10) {
+	uint8_t temp_r = wakeup_data_field_0;
+    	pmu_setting_state = wakeup_data_field_1;
+	pmu_setting_temp_based_with_active_r(temp_r);
+	// FLASH_init();
+    }
+    else if(wakeup_data_header == 0x11) {
+	uint8_t temp_r = wakeup_data_field_0;
+    	pmu_setting_state = wakeup_data_field_1;
+	pmu_setting_temp_based_with_sleep_r(temp_r);
+	// FLASH_init();
     }
 
     mbus_write_message32(0xE2, goc_state);

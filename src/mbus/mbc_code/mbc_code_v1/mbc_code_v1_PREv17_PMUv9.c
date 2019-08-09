@@ -1314,6 +1314,41 @@ int main() {
 	pmu_setting_temp_based_with_sleep_r(temp_r);
 	// FLASH_init();
     }
+    else if(wakeup_data_header == 0x12) {
+        // test flash routine
+        flash_addr = wakeup_data & 0x7FFF;
+        uint32_t data_arr[40];
+
+        FLASH_turn_on();
+        FLASH_erase_page(flash_addr);
+        FLASH_turn_off();
+
+        FLASH_turn_on();
+        copy_mem_from_FLASH_to_SRAM(0, flash_addr, 39);
+        FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, data_arr, 39);
+        FLASH_turn_off();
+
+        uint8_t i = 0;
+        for(i = 0; i < 40; i++) {
+            mbus_write_message32(0xF1, data_arr[i]);
+            data_arr[i] = flash_addr + i;
+        }
+
+        FLASH_turn_on();
+        FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, data_arr, 39);
+        copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 39);
+        FLASH_turn_off();
+
+        FLASH_turn_on();
+        copy_mem_from_FLASH_to_SRAM(0, flash_addr, 39);
+        FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, data_arr, 39);
+        FLASH_turn_off();
+
+        for(i = 0; i < 40; i++) {
+            mbus_write_message32(0xF1, data_arr[i]);
+        }
+        
+    }
 
     mbus_write_message32(0xE2, goc_state);
 

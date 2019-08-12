@@ -5,12 +5,13 @@
  ******************************************************************************************
  * v1: draft version; not tested on chip
  *
+ * PMUv9 version: with PMUv9
  ******************************************************************************************/
 
 //#include "../include/PREv18.h"
 #include "../include/PREv17.h"
 #include "../include/SNTv4_RF.h"
-// #include "../include/PMUv9_RF.h"
+#include "../include/PMUv9_RF.h"
 #include "../include/mbus.h"
 
 // uncomment this for debug mbus message
@@ -46,6 +47,7 @@
 #define SNT_TEMP_LDO    0x1
 #define SNT_TEMP_START  0x2
 #define SNT_TEMP_READ   0x3
+#define SNT_SET_PMU	0x4
 
 // FIXME: Make this more versatile
 // FLP states
@@ -111,6 +113,7 @@ volatile uint8_t snt_state;
 volatile uint8_t flp_state;
 volatile uint8_t temp_data_valid;
 volatile uint8_t sensor_queue;      // [0]: lnt; [1]: SNT; [2]: RDC;
+volatile uint8_t goc_temp_test_len;
 
 // default register values
 /*
@@ -239,7 +242,8 @@ static void XO_div(uint32_t div_val) {
 static void XO_init( void ) {
     
     // XO_CLK output pad (0: disabled; 1: 32kHz; 2: 16kHz; 3: 8kHz)
-    uint32_t xot_clk_out_sel = 0x1;
+    // To support xo in sleep mode, disable output monitor
+    uint32_t xot_clk_out_sel = 0x0;
     // Parasitic capacitance tuning (6-bit for each; each one adds 1.8pF)
     uint32_t xo_cap_drv = 0x3f; // additional cap on OSC_DRV
     uint32_t xo_cap_in  = 0x3f; // additional cap on OSC_IN
@@ -288,6 +292,9 @@ static void XOT_init(void){
 /**********************************************
  * Temp sensor functions (SNTv4)
  **********************************************/
+inline static void pmu_adc_read_latest();
+inline static void pmu_setting_temp_based();
+
 static void temp_sensor_start() {
     sntv4_r01.TSNS_RESETn = 1;
     sntv4_r01.TSNS_EN_IRQ = 1;
@@ -387,14 +394,51 @@ static void operation_temp_run() {
         else {
             // TODO: verify value measured
             temp_data = *REG0;
-            temp_data_valid = 1;
             
             // turn off temp sensor and ldo
             temp_sensor_power_off();
             snt_ldo_power_off();
 
-            snt_state = SNT_IDLE;
+	    mbus_write_message32(0xDD, 0xBB);
+            snt_state = SNT_SET_PMU;
         }
+    }
+    else if(snt_state == SNT_SET_PMU) {
+        temp_data_valid = 1;
+
+	/*
+        // Read latest PMU ADC measurement
+        pmu_adc_read_latest();
+
+	mbus_write_message32(0xDD, 0xBB);
+
+        // Change PMU based on temp
+	// code to save space
+	uint32_t last_pmu_state = pmu_setting_state;
+        if(temp_data > PMU_95C_threshold_sns) {
+            pmu_setting_state = PMU_95C;
+        }
+        else if(temp_data > PMU_75C_threshold_sns) {
+            pmu_setting_state = PMU_75C;
+        }
+        else if(temp_data > PMU_55C_threshold_sns) {
+            pmu_setting_state = PMU_55C;
+        }
+        else if(temp_data < PMU_10C_threshold_sns) {
+            pmu_setting_state = PMU_10C;
+        }
+        else if(temp_data < PMU_20C_threshold_sns) {
+            pmu_setting_state = PMU_20C;
+        }
+        else if(temp_data > PMU_20C_threshold_sns) {
+            pmu_setting_state = PMU_25C;
+        }
+	if(last_pmu_state != pmu_setting_state) {
+	    pmu_setting_temp_based();
+	}
+	*/
+
+	snt_state = SNT_IDLE;
     }
 }
 
@@ -418,8 +462,9 @@ void FLASH_init( void ) {
     // Tune Flash
     mbus_remote_register_write(FLP_ADDR, 0x26, 0x0D7788); // Program Current
     mbus_remote_register_write(FLP_ADDR, 0x27, 0x011BC8); // Erase Pump Diode Chain
-    mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
-    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F03); // Voltage Clamper Tuning
+    mbus_remote_register_write(FLP_ADDR, 0x01, 0x00FFF0); // Tprog idle time
+    mbus_remote_register_write(FLP_ADDR, 0x02, 0x008000); // Terase idle time
+    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F07); // Voltage Clamper Tuning
     mbus_remote_register_write(FLP_ADDR, 0x0F, 0x001001); // Flash interrupt target register addr: REG0 -> REG1
     //mbus_remote_register_write(FLP_ADDR, 0x12, 0x000003); // Auto Power On/Off
 
@@ -459,7 +504,7 @@ inline void FLASH_read_from_SRAM_bulk(uint32_t* remote_addr,
                                           length_in_words_minus_one);
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void copy_mem_from_SRAM_to_FLASH(uint32_t sram_addr, 
                                  uint32_t flash_addr, 
                                  uint32_t length_in_words_minus_one) {
@@ -479,7 +524,7 @@ void copy_mem_from_SRAM_to_FLASH(uint32_t sram_addr,
     if(*REG1 != 0x00003F) { flp_fail(2); }
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void copy_mem_from_FLASH_to_SRAM(uint32_t sram_addr, 
                                  uint32_t flash_addr,
                                  uint32_t length_in_words_minus_one) {
@@ -499,7 +544,7 @@ void copy_mem_from_FLASH_to_SRAM(uint32_t sram_addr,
     if(*REG1 != 0x00002B) { flp_fail(3); }
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void FLASH_erase_page(uint32_t flash_addr) {
     flp_state = FLP_ERASE;
 
@@ -516,7 +561,7 @@ void FLASH_erase_page(uint32_t flash_addr) {
     if(*REG1 != 0x00004F) { flp_fail(4); }
 }
 
-// REQUIRES: FLASH is turned on
+// REQUIRES: Flash is turned on
 void FLASH_erase_all() {
     uint32_t i;
     for(i = 0; i <= 0x7F; ++i) {
@@ -660,7 +705,7 @@ static void pmu_set_sleep_clk(uint8_t r, uint8_t l, uint8_t base, uint8_t l_1p2)
                  (base)));      // floor frequency base (0-63)
 }
 
-inline static void pmu_set_sllep_radio() {
+inline static void pmu_set_sleep_radio() {
     pmu_set_sleep_clk(0xF, 0xA, 0x5, 0xF/*V1P2*/);
 }
 
@@ -668,14 +713,69 @@ inline static void pmu_set_sleep_low() {
     pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
 }
 
-inline static void pmu_setting_temp_based() {
+static void pmu_setting_temp_based_with_active_r(uint8_t r) {
+    mbus_write_message32(0xB7, pmu_setting_state);
+    if(pmu_setting_state == PMU_10C) {
+        pmu_set_active_clk(r, 0x2, 0x10, 0x4/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_20C) {
+    	pmu_set_active_clk(r, 0x2, 0x10, 0x4/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_25C) {
+        pmu_set_active_clk(r, 0x1, 0x10, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_35C) {
+        pmu_set_active_clk(r, 0x1, 0x10, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_55C) {
+        pmu_set_active_clk(r, 0x0, 0x10, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_75C) {
+        pmu_set_active_clk(r, 0x4, 0x7, 0x8/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_95C) {
+        pmu_set_active_clk(r, 0x2, 0x7, 0x4/*V1P2*/);
+    }
+}
+
+static void pmu_setting_temp_based_with_sleep_r(uint8_t r) {
+    mbus_write_message32(0xB7, pmu_setting_state);
+    if(pmu_setting_state == PMU_10C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x2/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_20C) {
+	pmu_set_sleep_clk(r, 0x2, 0x1, 0x4/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_25C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_35C) {
+        pmu_set_sleep_clk(r, 0x0, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_55C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_75C) {
+        pmu_set_sleep_clk(r, 0x1, 0x1, 0x1/*V1P2*/);
+    }
+    else if(pmu_setting_state == PMU_95C) {
+        pmu_set_sleep_clk(r, 0x0, 0x1, 0x0/*V1P2*/);
+    }
+}
+
+static void pmu_setting_temp_based() {
     mbus_write_message32(0xB7, pmu_setting_state);
     if(pmu_setting_state == PMU_10C) {
         pmu_set_active_clk(0xD, 0x2, 0x10, 0x4/*V1P2*/);
         pmu_set_sleep_clk(0xF, 0x1, 0x1, 0x2/*V1P2*/);
     }
+    else if(pmu_setting_state == PMU_20C) {
+    	pmu_set_active_clk(0x7, 0x2, 0x10, 0x4/*V1P2*/);
+	pmu_set_sleep_clk(0xF, 0x2, 0x1, 0x4/*V1P2*/);
+    }
     else if(pmu_setting_state == PMU_25C) {
         pmu_set_active_clk(0x5, 0x1, 0x10, 0x2/*V1P2*/);
+        // pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
         pmu_set_sleep_low();
     }
     else if(pmu_setting_state == PMU_35C) {
@@ -697,7 +797,6 @@ inline static void pmu_setting_temp_based() {
 }
 
 inline static void pmu_set_clk_init() {
-    pmu_setting_state = PMU_25C;
     pmu_setting_temp_based();
     // Use the new reset scheme in PMUv3
     pmu_reg_write(0x05,         // PMU_EN_SAR_RATIO_OVERRIDE; default: 12'h000
@@ -986,10 +1085,8 @@ static void operation_init( void ) {
     delay(MBUS_DELAY);
     mbus_enumerate(FLP_ADDR);
     delay(MBUS_DELAY);
-    /*
-    mbus_enumerate(PMU_ADDR);
-    delay(MBUS_DELAY);
-    */
+    // mbus_enumerate(PMU_ADDR);
+    // delay(MBUS_DELAY);
 
     // Default CPU halt function
     set_halt_until_mbus_tx();
@@ -1007,18 +1104,16 @@ static void operation_init( void ) {
 
     sensor_queue = 0;
 
-    PMU_ADC_4P2_VAL = 0x4B;
+    // PMU_ADC_4P2_VAL = 0x4B;
 
-    pmu_setting_state = PMU_25C;
-    PMU_10C_threshold_sns =   600;    // Around 10C
-    PMU_20C_threshold_sns =  1000;    // Around 20C
-    PMU_35C_threshold_sns =  2000;    // Around 35C
-    PMU_55C_threshold_sns =  3200;    // Around 55C
-    PMU_75C_threshold_sns =  7000;    // Around 75C
-    PMU_95C_threshold_sns = 12000;    // Around 95C
-
-    // BREAKPOINT 0x02
-    mbus_write_message32(0xBA, 0x02);
+    // // 35C works for now
+    // pmu_setting_state = PMU_25C;
+    // PMU_10C_threshold_sns =   600;    // Around 10C
+    // PMU_20C_threshold_sns =  1000;    // Around 20C
+    // PMU_35C_threshold_sns =  2000;    // Around 35C
+    // PMU_55C_threshold_sns =  3200;    // Around 55C
+    // PMU_75C_threshold_sns =  7000;    // Around 75C
+    // PMU_95C_threshold_sns = 12000;    // Around 95C
 
 
     // Initialization
@@ -1028,6 +1123,9 @@ static void operation_init( void ) {
     prev17_r0D.SRAM_TUNE_DECODER_DLY = 15; // Default 0x2, 4 bits
     prev17_r0D.SRAM_USE_INVERTER_SA= 1; 
     *REG_SRAM_TUNE = prev17_r0D.as_int;
+
+    // BREAKPOINT 0x02
+    mbus_write_message32(0xBA, 0x02);
 
     FLASH_init();
     sntv4_r01.TSNS_BURST_MODE = 0;
@@ -1064,7 +1162,7 @@ int main() {
         // BREAKPOINT 0x01
         mbus_write_message32(0xBA, 0x01);
 
-	operation_sleep_notimer();
+	//operation_sleep_notimer();
     }
 
     // FLASH_turn_on();
@@ -1075,8 +1173,9 @@ int main() {
     wakeup_data = *GOC_DATA_IRQ;
     mbus_write_message32(0xAD, wakeup_data);
     wakeup_data_header = (wakeup_data >> 24) & 0xFF;
+
     uint32_t wakeup_data_field_0 = wakeup_data & 0xFF;
-    // uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
+    uint32_t wakeup_data_field_1 = (wakeup_data >> 8) & 0xFF;
     // uint32_t wakeup_data_field_2 = (wakeup_data >> 16) & 0xFF;
     if(wakeup_data_header == 0x01) {
         if(snt_state == SNT_IDLE) {
@@ -1086,7 +1185,7 @@ int main() {
                 operation_temp_run();
             } while(!temp_data_valid);
 
-            mbus_write_message32(0xAB, temp_data);
+            //mbus_write_message32(0xAB, temp_data);
         }
 
     }
@@ -1124,6 +1223,7 @@ int main() {
 		copy_mem_from_FLASH_to_SRAM(0x000, flash_addr, 0);
                 FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
                 FLASH_turn_off();
+		delay(MBUS_DELAY);
 
 		mbus_write_message32(0xF1, *temp_arr);
 		delay(MBUS_DELAY);
@@ -1166,12 +1266,11 @@ int main() {
         // Take a temp measurement every 5 secs
         // Store data into flash after 10 measurements
         if(goc_state == GOC_IDLE) {
+            goc_temp_test_len = wakeup_data & 0xFF;
 	    goc_temp_test_count = 0;
 	    goc_state = GOC_TEMP_TEST;
 	    //set_wakeup_timer_prev17(10, 1, 1);
 	    set_xo_timer(32900, 1, 1);
-	    //*REG_XOT_CONFIG = 0x38084;
-	    //*XOT_RESET = 0x1;
 	    operation_sleep();
         }
     }
@@ -1185,25 +1284,90 @@ int main() {
 	}
     }
     else if(wakeup_data_header == 0x07) {
-        /*
-        pmu_adc_read_latest();
-        mbus_write_message32(0xB1, read_data_batadc);
-        mbus_write_message32(0xB2, read_data_batadc_diff);
-        */
+        // pmu_adc_read_latest();
+        // mbus_write_message32(0xB1, read_data_batadc);
+        // mbus_write_message32(0xB2, read_data_batadc_diff);
     }
     else if(wakeup_data_header == 0x08) {
-        /*
-        pmu_adc_read_latest();
-        mbus_write_message32(0xB1, read_data_batadc);
+        // pmu_adc_read_latest();
+        // mbus_write_message32(0xB1, read_data_batadc);
 
-        // Update 4P2 voltage reference
-        if(wakeup_data_field_0 == 0) {
-            PMU_ADC_4P2_VAL = read_data_batadc;
+        // // Update 4P2 voltage reference
+        // if(wakeup_data_field_0 == 0) {
+        //     PMU_ADC_4P2_VAL = read_data_batadc;
+        // }
+        // else {
+        //     PMU_ADC_4P2_VAL = wakeup_data_field_0;
+        // }
+    }
+    else if(wakeup_data_header == 0x09) {
+    	// pmu_setting_state = wakeup_data_field_0 & 0x7;
+	// pmu_setting_temp_based();
+	// // FLASH_init();
+    }
+    else if(wakeup_data_header == 0x10) {
+	// uint8_t temp_r = wakeup_data_field_0;
+    	// pmu_setting_state = wakeup_data_field_1;
+	// pmu_setting_temp_based_with_active_r(temp_r);
+	// // FLASH_init();
+    }
+    else if(wakeup_data_header == 0x11) {
+	// uint8_t temp_r = wakeup_data_field_0;
+    	// pmu_setting_state = wakeup_data_field_1;
+	// pmu_setting_temp_based_with_sleep_r(temp_r);
+	// // FLASH_init();
+    }
+    else if(wakeup_data_header == 0x12) {
+        // test flash routine
+        flash_addr = wakeup_data & 0x7FFF;
+	uint32_t data_arr[40], read_data[40];
+
+        FLASH_turn_on();
+        FLASH_erase_page(flash_addr);
+
+	delay(10000);
+        FLASH_turn_off();
+	delay(10000);
+        FLASH_turn_on();
+	
+        FLASH_erase_page(flash_addr + 0x100);
+
+	delay(10000);
+        FLASH_turn_off();
+
+	delay(10000);
+	
+        FLASH_turn_on();
+        copy_mem_from_FLASH_to_SRAM(0, flash_addr, 39);
+        FLASH_turn_off();
+	delay(10000);
+        FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, data_arr, 39);
+	delay(MBUS_DELAY);
+
+        uint8_t i = 0;
+        for(i = 0; i < 40; i++) {
+            mbus_write_message32(0xF1, data_arr[i]);
+            data_arr[i] = 0x12345 + i;
         }
-        else {
-            PMU_ADC_4P2_VAL = wakeup_data_field_0;
+	
+        FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, data_arr, 39);
+	delay(10000);
+        FLASH_turn_on();
+        copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 39);
+        FLASH_turn_off();
+
+	delay(10000);
+
+        FLASH_turn_on();
+        copy_mem_from_FLASH_to_SRAM(0, flash_addr, 39);
+        FLASH_turn_off();
+	delay(10000);
+        FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, read_data, 39);
+	delay(MBUS_DELAY);
+
+        for(i = 0; i < 40; i++) {
+            mbus_write_message32(0xF1, read_data[i]);
         }
-        */
     }
 
     mbus_write_message32(0xE2, goc_state);
@@ -1219,25 +1383,26 @@ int main() {
     // testing
     //set_xo_timer(0x8888, 1, 1);
     //mbus_write_message32(0xA0, *REG_XOT_CONFIG);
-    //*REG_XOT_CONFIG = 0x38888;
-    //*XOT_RESET = 0x1;
     //mbus_write_message32(0xAC, *REG_XOT_CONFIG);
     //mbus_write_message32(0xAC, *REG_XOT_CONFIGU);
     // set_wakeup_timer_prev17(10, 1, 1);
     // timer32_config(1000, 1, 0, 0);
     //mbus_write_message32(0xBC, *REG_XOT_VAL_L);
-    // delay(1000);
+    //*XOT_RESET = 0x01;
+    //delay(1000);
     //mbus_write_message32(0xBC, *REG_XOT_VAL_U);
     //mbus_write_message32(0xBC, *XOT_VAL);
-    //*XOT_RESET = 0x01;
     //mbus_write_message32(0xBC, *REG_XOT_VAL_L);
     //mbus_write_message32(0xBC, *REG_XOT_VAL_U);
+    //*XOT_RESET = 0x01;
+    //*REG_XOT_CONFIG = 0x38888;
     //mbus_write_message32(0xBC, *XOT_VAL);
     //operation_sleep();
     //while(1);
 
     mbc_state = MBC_READY;
 
+    // Finite state machine
     while(1) {
 
     mbus_write_message32(0xED, mbc_state);
@@ -1265,70 +1430,38 @@ int main() {
             operation_temp_run();
         } while(!temp_data_valid);
 
-        mbus_write_message32(0xCC, temp_data);
-
-	/*
-        // Read latest PMU ADC measurement
-	pmu_adc_read_latest();
-
-        // Change PMU based on temp
-        if(temp_data > PMU_95C_threshold_sns) {
-            if(pmu_setting_state != PMU_95C) {
-                pmu_setting_state = PMU_95C;
-                pmu_setting_temp_based();
-            }
-        }
-        else if(temp_data > PMU_75C_threshold_sns) {
-            if(pmu_setting_state != PMU_75C) {
-                pmu_setting_state = PMU_75C;
-                pmu_setting_temp_based();
-            }
-        }
-        else if(temp_data > PMU_55C_threshold_sns) {
-            if(pmu_setting_state != PMU_55C) {
-                pmu_setting_state = PMU_55C;
-                pmu_setting_temp_based();
-            }
-        }
-        else if(temp_data < PMU_10C_threshold_sns) {
-            if(pmu_setting_state != PMU_10C) {
-                pmu_setting_state = PMU_10C;
-                pmu_setting_temp_based();
-            }
-        }
-        else if(temp_data < PMU_20C_threshold_sns) {
-            if(pmu_setting_state != PMU_20C) {
-                pmu_setting_state = PMU_20C;
-                pmu_setting_temp_based();
-            }
-        }
-        else if(temp_data > PMU_20C_threshold_sns) {
-            if(pmu_setting_state != PMU_25C) {
-                pmu_setting_state = PMU_25C;
-                pmu_setting_temp_based();
-            }
-        }
-	*/
+        mbus_write_message32(0xDD, temp_data);
 
 	if(goc_state == GOC_TEMP_TEST) {
 	    mbus_write_message32(0xBC, goc_temp_test_count);
 	    goc_temp_arr[goc_temp_test_count] = temp_data;
 	    ++goc_temp_test_count;
 
-	    if(goc_temp_test_count < 6) {
+	    if(goc_temp_test_count < goc_temp_test_len) {
 		// set_wakeup_timer() NOT WORKING
 	        // set_wakeup_timer_prev17(10, 1, 1);
 		set_xo_timer(32900, 1, 1);
 	    }
 	    else {
 		uint32_t i;
-		for(i = 0; i < 6; i++) {
+		for(i = 0; i < goc_temp_test_len; i++) {
 			mbus_write_message32(0xEE, goc_temp_arr[i]);
 		}
-		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, 5);
 	    	FLASH_turn_on();
 		FLASH_erase_page(0x000);
-		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, 5);
+		FLASH_turn_off();
+	    	FLASH_turn_on();
+		// delay(60000);
+		FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
+		// delay(10000);
+		// FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
+		// delay(10000);
+		copy_mem_from_SRAM_to_FLASH(0x000, 0x000, goc_temp_test_len - 1);
+		// delay(10000);
+		//copy_mem_from_FLASH_to_SRAM(0x000, 0x000, goc_temp_test_len - 1);
+		//delay(10000);
+		//FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, goc_temp_arr, goc_temp_test_len - 1);
+		//delay(10000);
 		FLASH_turn_off();
 		goc_state = GOC_IDLE;
 

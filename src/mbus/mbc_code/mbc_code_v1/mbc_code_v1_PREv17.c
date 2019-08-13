@@ -462,9 +462,11 @@ void FLASH_init( void ) {
     // Tune Flash
     mbus_remote_register_write(FLP_ADDR, 0x26, 0x0D7788); // Program Current
     mbus_remote_register_write(FLP_ADDR, 0x27, 0x011BC8); // Erase Pump Diode Chain
-    mbus_remote_register_write(FLP_ADDR, 0x01, 0x00FFF0); // Tprog idle time
-    mbus_remote_register_write(FLP_ADDR, 0x02, 0x008000); // Terase idle time
-    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F07); // Voltage Clamper Tuning
+    mbus_remote_register_write(FLP_ADDR, 0x01, 0x007FF0); // Tprog idle time
+    mbus_remote_register_write(FLP_ADDR, 0x02, 0x00A000); // Terase idle time
+    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F06); // Voltage Clamper Tuning
+    mbus_remote_register_write(FLP_ADDR, 0x05, 0x000ACF); // Tcap
+    mbus_remote_register_write(FLP_ADDR, 0x06, 0x002F3F); // Tref
     mbus_remote_register_write(FLP_ADDR, 0x0F, 0x001001); // Flash interrupt target register addr: REG0 -> REG1
     //mbus_remote_register_write(FLP_ADDR, 0x12, 0x000003); // Auto Power On/Off
 
@@ -1225,9 +1227,9 @@ int main() {
                 FLASH_turn_off();
 		delay(MBUS_DELAY);
 
-		mbus_write_message32(0xF1, *temp_arr);
+		mbus_write_message32(0xC1, *temp_arr);
 		delay(MBUS_DELAY);
-		mbus_write_message32(0xF1, flash_addr);
+		mbus_write_message32(0xC1, flash_addr);
 		delay(MBUS_DELAY);
             }
 
@@ -1256,7 +1258,7 @@ int main() {
             }
             uint32_t i;
             for(i = 0; i <= len_min_one; ++i) {
-                mbus_write_message32(0xF1, temp_arr[i]);
+                mbus_write_message32(0xC1, temp_arr[i]);
             }
 
             goc_state = GOC_IDLE;
@@ -1346,7 +1348,7 @@ int main() {
 
         uint8_t i = 0;
         for(i = 0; i < 40; i++) {
-            mbus_write_message32(0xF1, data_arr[i]);
+            mbus_write_message32(0xC1, data_arr[i]);
             data_arr[i] = 0x12345 + i;
         }
 	
@@ -1366,8 +1368,28 @@ int main() {
 	delay(MBUS_DELAY);
 
         for(i = 0; i < 40; i++) {
-            mbus_write_message32(0xF1, read_data[i]);
+            mbus_write_message32(0xC1, read_data[i]);
         }
+    }
+    else if(wakeup_data_header == 0x13) {
+	// Tprog idle time
+	mbus_remote_register_write(FLP_ADDR, 0x01, wakeup_data & 0xFFFFFF); 
+    }
+    else if(wakeup_data_header == 0x14) {
+	// Terase idle time
+	mbus_remote_register_write(FLP_ADDR, 0x02, wakeup_data & 0xFFFFFF); 
+    }
+    else if(wakeup_data_header == 0x15) {
+	// Voltage Clamper Tuning
+	mbus_remote_register_write(FLP_ADDR, 0x19, wakeup_data & 0xFFFFFF); 
+    }
+    else if(wakeup_data_header == 0x16) {
+	// Tcap Clamper Tuning
+	mbus_remote_register_write(FLP_ADDR, 0x05, wakeup_data & 0xFFFFFF); 
+    }
+    else if(wakeup_data_header == 0x17) {
+	// Tref Clamper Tuning
+	mbus_remote_register_write(FLP_ADDR, 0x16, wakeup_data & 0xFFFFFF); 
     }
 
     mbus_write_message32(0xE2, goc_state);

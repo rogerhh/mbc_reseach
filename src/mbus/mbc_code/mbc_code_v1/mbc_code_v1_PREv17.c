@@ -60,13 +60,15 @@
 #define FLP_ERASE           0x6
 
 // PMU states
-#define PMU_10C 0x0
-#define PMU_20C 0x1
-#define PMU_25C 0x2
-#define PMU_35C 0x3
-#define PMU_55C 0x4
-#define PMU_75C 0x5
-#define PMU_95C 0x6
+#define PMU_NEG_10C 0x0
+#define PMU_0C      0x1
+#define PMU_10C     0x2
+#define PMU_20C     0x3
+#define PMU_25C     0x4
+#define PMU_35C     0x5
+#define PMU_55C     0x6
+#define PMU_75C     0x7
+#define PMU_95C     0x8
 
 // CP parameters
 #define TIMERWD_val 0xFFFFF  // 0xFFFFF about 13 sec with Y5 running default clock (PRCv17)
@@ -462,15 +464,69 @@ void FLASH_init( void ) {
     // Tune Flash
     mbus_remote_register_write(FLP_ADDR, 0x26, 0x0D7788); // Program Current
     mbus_remote_register_write(FLP_ADDR, 0x27, 0x011BC8); // Erase Pump Diode Chain
-    mbus_remote_register_write(FLP_ADDR, 0x01, 0x007FF0); // Tprog idle time
-    mbus_remote_register_write(FLP_ADDR, 0x02, 0x00A000); // Terase idle time
-    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F06); // Voltage Clamper Tuning
-    mbus_remote_register_write(FLP_ADDR, 0x05, 0x000ACF); // Tcap
-    mbus_remote_register_write(FLP_ADDR, 0x06, 0x002F3F); // Tref
+    mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
+    mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
+    mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
+    mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
+    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F03); // Voltage Clamper Tuning
     mbus_remote_register_write(FLP_ADDR, 0x0F, 0x001001); // Flash interrupt target register addr: REG0 -> REG1
     //mbus_remote_register_write(FLP_ADDR, 0x12, 0x000003); // Auto Power On/Off
 
 }
+
+// static void flash_setting_temp_based() {
+//     mbus_write_message32(0xB5, pmu_setting_state);
+//     // uint32_t Tprog, Terase, Tcap, Tvref, vclamp;
+//     if(pmu_setting_state == PMU_NEG_10C) {
+// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
+// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x00217F); // Tvref
+// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F06); // Voltage Clamper Tuning
+//     }
+//     else if(pmu_setting_state == PMU_0C) {
+// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
+// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
+// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F05); // Voltage Clamper Tuning
+//     }
+//     else if(pmu_setting_state == PMU_10C) {
+// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
+// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
+// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F03); // Voltage Clamper Tuning
+//     }
+//     else if(pmu_setting_state == PMU_20C) {
+// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
+// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
+// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
+// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F03); // Voltage Clamper Tuning
+//     }
+//     else if(pmu_setting_state == PMU_25C) {
+//         pmu_set_active_clk(0x5, 0x1, 0x10, 0x2/*V1P2*/);
+//         // pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
+//         pmu_set_sleep_low();
+//     }
+//     else if(pmu_setting_state == PMU_35C) {
+//         pmu_set_active_clk(0x2, 0x1, 0x10, 0x2/*V1P2*/);
+//         pmu_set_sleep_clk(0x2, 0x0, 0x1, 0x1/*V1P2*/);
+//     }
+//     else if(pmu_setting_state == PMU_55C) {
+//         pmu_set_active_clk(0x1, 0x0, 0x10, 0x2/*V1P2*/);
+//         pmu_set_sleep_clk(0x1, 0x1, 0x1, 0x1/*V1P2*/);
+//     }
+//     else if(pmu_setting_state == PMU_75C) {
+//         pmu_set_active_clk(0xA, 0x4, 0x7, 0x8/*V1P2*/);
+//         pmu_set_sleep_clk(0x1, 0x1, 0x1, 0x1/*V1P2*/);
+//     }
+//     else if(pmu_setting_state == PMU_95C) {
+//         pmu_set_active_clk(0x7, 0x2, 0x7, 0x4/*V1P2*/);
+//         pmu_set_sleep_clk(0x1, 0x0, 0x1, 0x0/*V1P2*/);
+//     }
+// }
 
 void FLASH_turn_on() {
     set_halt_until_mbus_trx();
@@ -1219,12 +1275,12 @@ int main() {
             if(flp_state == FLP_OFF) {
                 FLASH_turn_on();
                 FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
-                FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
                 copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 0);
-		delay(10000);
-		copy_mem_from_FLASH_to_SRAM(0x000, flash_addr, 0);
-                FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
                 FLASH_turn_off();
+                FLASH_turn_on();
+		copy_mem_from_FLASH_to_SRAM(0x000, flash_addr, 0);
+                FLASH_turn_off();
+                FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, temp_arr, 0);
 		delay(MBUS_DELAY);
 
 		mbus_write_message32(0xC1, *temp_arr);
@@ -1326,23 +1382,13 @@ int main() {
 
         FLASH_turn_on();
         FLASH_erase_page(flash_addr);
-
-	delay(10000);
-        FLASH_turn_off();
-	delay(10000);
-        FLASH_turn_on();
-	
         FLASH_erase_page(flash_addr + 0x100);
-
-	delay(10000);
-        FLASH_turn_off();
-
-	delay(10000);
+	FLASH_turn_off();
 	
-        FLASH_turn_on();
+	FLASH_turn_on();
         copy_mem_from_FLASH_to_SRAM(0, flash_addr, 39);
         FLASH_turn_off();
-	delay(10000);
+
         FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, data_arr, 39);
 	delay(MBUS_DELAY);
 
@@ -1353,7 +1399,6 @@ int main() {
         }
 	
         FLASH_write_to_SRAM_bulk((uint32_t*) 0x000, data_arr, 39);
-	delay(10000);
         FLASH_turn_on();
         copy_mem_from_SRAM_to_FLASH(0x000, flash_addr, 39);
         FLASH_turn_off();
@@ -1363,7 +1408,6 @@ int main() {
         FLASH_turn_on();
         copy_mem_from_FLASH_to_SRAM(0, flash_addr, 39);
         FLASH_turn_off();
-	delay(10000);
         FLASH_read_from_SRAM_bulk((uint32_t*) 0x000, read_data, 39);
 	delay(MBUS_DELAY);
 
@@ -1380,16 +1424,16 @@ int main() {
 	mbus_remote_register_write(FLP_ADDR, 0x02, wakeup_data & 0xFFFFFF); 
     }
     else if(wakeup_data_header == 0x15) {
-	// Voltage Clamper Tuning
-	mbus_remote_register_write(FLP_ADDR, 0x19, wakeup_data & 0xFFFFFF); 
-    }
-    else if(wakeup_data_header == 0x16) {
-	// Tcap Clamper Tuning
+	// Tcap 
 	mbus_remote_register_write(FLP_ADDR, 0x05, wakeup_data & 0xFFFFFF); 
     }
+    else if(wakeup_data_header == 0x16) {
+	// Tref 
+	mbus_remote_register_write(FLP_ADDR, 0x06, wakeup_data & 0xFFFFFF); 
+    }
     else if(wakeup_data_header == 0x17) {
-	// Tref Clamper Tuning
-	mbus_remote_register_write(FLP_ADDR, 0x16, wakeup_data & 0xFFFFFF); 
+	// Voltage Clamper Tuning
+	mbus_remote_register_write(FLP_ADDR, 0x19, wakeup_data & 0xFFFFFF); 
     }
 
     mbus_write_message32(0xE2, goc_state);

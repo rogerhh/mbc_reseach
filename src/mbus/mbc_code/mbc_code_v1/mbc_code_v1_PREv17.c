@@ -465,10 +465,10 @@ void FLASH_init( void ) {
     mbus_remote_register_write(FLP_ADDR, 0x26, 0x0D7788); // Program Current
     mbus_remote_register_write(FLP_ADDR, 0x27, 0x011BC8); // Erase Pump Diode Chain
     mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
-    mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
-    mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
-    mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
-    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F03); // Voltage Clamper Tuning
+    mbus_remote_register_write(FLP_ADDR, 0x02, 0x000A00); // Terase idle time
+    mbus_remote_register_write(FLP_ADDR, 0x05, 0x000FCF); // Tcap
+    mbus_remote_register_write(FLP_ADDR, 0x06, 0x002F7F); // Tvref
+    mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F06); // Voltage Clamper Tuning
     mbus_remote_register_write(FLP_ADDR, 0x0F, 0x001001); // Flash interrupt target register addr: REG0 -> REG1
     //mbus_remote_register_write(FLP_ADDR, 0x12, 0x000003); // Auto Power On/Off
 

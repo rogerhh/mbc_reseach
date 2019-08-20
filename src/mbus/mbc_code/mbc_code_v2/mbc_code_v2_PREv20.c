@@ -168,8 +168,6 @@ void xo_init( void ) {
     *REG_XO_CONF2 = ((xo_cap_drv << 6) | (xo_cap_in << 0));
 
     // XO xonfiguration
-    prev20_r19.XO_SLEEP         = 0x1;
-    prev20_r19.XO_ISOLATE       = 0x1;
     prev20_r19.XO_PULSE_SEL     = 0x4; // pulse with sel, 1-hot encoded
     prev20_r19.XO_DELAY_EN      = 0x3; // pair usage together with xo_pulse_sel
     prev20_r19.XO_DRV_START_UP  = 0x0;
@@ -178,10 +176,11 @@ void xo_init( void ) {
     prev20_r19.XO_SCN_ENB       = 0x1;
 
     // TODO: check if need 32.768kHz clock
-    prev20_r19.XO_EN_DIV        = 0x0; // (not used) divider enable
+    prev20_r19.XO_EN_DIV        = 0x1; // divider enable (also enables CLK_OUT)
     prev20_r19.XO_S             = 0x0; // (not used) division ration for 16kHz out
     prev20_r19.XO_SEL_CP_DIV    = 0x0; // 1: 0.3v-generation charge-pump uses divided clock
-    prev20_r19.XO_EN_OUT        = 0x0; // xo output disable
+    prev20_r19.XO_EN_OUT        = 0x1; // xo output enabled;
+    				       // Note: I think this means output to XOT
     // Pseudo-resistor selection
     prev20_r19.XO_RP_LOW        = 0x0;
     prev20_r19.XO_RP_MEDIA      = 0x1;
@@ -190,34 +189,39 @@ void xo_init( void ) {
 
     prev20_r19.XO_SLEEP = 0x0;
     *REG_XO_CONF1 = prev20_r19.as_int;
-    delay(100); // 1ms
+    mbus_write_message32(0xA1, *REG_XO_CONF1);
+    delay(100); // >= 1ms
 
     prev20_r19.XO_ISOLATE = 0x0;
     *REG_XO_CONF1 = prev20_r19.as_int;
-    delay(100); 
+    mbus_write_message32(0xA1, *REG_XO_CONF1);
+    delay(100); // >= 1ms
 
     prev20_r19.XO_DRV_START_UP = 0x1;
     *REG_XO_CONF1 = prev20_r19.as_int;
-    delay(2000); // >= 1s
+    mbus_write_message32(0xA1, *REG_XO_CONF1);
+    delay(40000); // >= 1s
 
     prev20_r19.XO_SCN_CLK_SEL = 0x1;
     *REG_XO_CONF1 = prev20_r19.as_int;
+    mbus_write_message32(0xA1, *REG_XO_CONF1);
     delay(2000); // >= 300us
 
     prev20_r19.XO_SCN_CLK_SEL = 0x0;
     prev20_r19.XO_SCN_ENB     = 0x0;
     *REG_XO_CONF1 = prev20_r19.as_int;
-    delay(2000); // >= 1s
+    mbus_write_message32(0xA1, *REG_XO_CONF1);
+    delay(40000);  // >= 1s
 
     prev20_r19.XO_DRV_START_UP = 0x0;
     prev20_r19.XO_DRV_CORE     = 0x1;
     prev20_r19.XO_SCN_CLK_SEL  = 0x1;
     *REG_XO_CONF1 = prev20_r19.as_int;
-    
+    mbus_write_message32(0xA1, *REG_XO_CONF1);
+
     enable_xo_timer();
     // start_xo_cout();
-    *XOT_RESET_CNT = 0x1;
-
+    
     // BREAKPOint 0x03
     mbus_write_message32(0xBA, 0x03);
 
@@ -1395,11 +1399,12 @@ int main() {
 	}
     }
 
-    // testing
-    set_xo_timer(0, 0x8888, 1, 0);
-    start_xo_cnt();
-    operation_sleep();
-    while(1);
+
+    // testing XOT
+    // set_xo_timer(0, 0x8888, 1, 0);
+    // start_xo_cnt();
+    // operation_sleep();
+    // while(1);
 
     mbc_state = MBC_READY;
 
@@ -1442,6 +1447,7 @@ int main() {
 		// set_wakeup_timer() NOT WORKING
 	        // set_wakeup_timer_prev17(10, 1, 1);
 		set_xo_timer(0, 32900, 1, 0);
+		start_xo_cnt();
 	    }
 	    else {
 		uint32_t i;

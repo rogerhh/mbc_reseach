@@ -1,9 +1,11 @@
 /******************************************************************************************
  * Author:      Roger Hsiao
- * Description: Monarch butterfly challenge code
- *                                          - PREv17 / PMUv9 / SNTv4 / FLPv3S
+ * Description: Monarch butterfly challenge code v2
+ *                                          - PREv20 / PMUv9 / SNTv4 / FLPv3S
  ******************************************************************************************
- * v1: draft version; not tested on chip
+ * v1: PREv17; tested on chip with XO. Flash setting completed for different temp and voltages
+ *
+ * v2: PREv20
  *
  * PMUv9 version: with PMUv9
  ******************************************************************************************/
@@ -423,60 +425,6 @@ void FLASH_init( void ) {
     //mbus_remote_register_write(FLP_ADDR, 0x12, 0x000003); // Auto Power On/Off
 
 }
-
-// static void flash_setting_temp_based() {
-//     mbus_write_message32(0xB5, pmu_setting_state);
-//     // uint32_t Tprog, Terase, Tcap, Tvref, vclamp;
-//     if(pmu_setting_state == PMU_NEG_10C) {
-// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
-// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x00217F); // Tvref
-// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F06); // Voltage Clamper Tuning
-//     }
-//     else if(pmu_setting_state == PMU_0C) {
-// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
-// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
-// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F05); // Voltage Clamper Tuning
-//     }
-//     else if(pmu_setting_state == PMU_10C) {
-// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
-// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
-// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F03); // Voltage Clamper Tuning
-//     }
-//     else if(pmu_setting_state == PMU_20C) {
-// 	mbus_remote_register_write(FLP_ADDR, 0x01, 0x000109); // Tprog idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x02, 0x000100); // Terase idle time
-// 	mbus_remote_register_write(FLP_ADDR, 0x05, 0x0007CF); // Tcap
-// 	mbus_remote_register_write(FLP_ADDR, 0x06, 0x001F3F); // Tvref
-// 	mbus_remote_register_write(FLP_ADDR, 0x19, 0x000F03); // Voltage Clamper Tuning
-//     }
-//     else if(pmu_setting_state == PMU_25C) {
-//         pmu_set_active_clk(0x5, 0x1, 0x10, 0x2/*V1P2*/);
-//         // pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
-//         pmu_set_sleep_low();
-//     }
-//     else if(pmu_setting_state == PMU_35C) {
-//         pmu_set_active_clk(0x2, 0x1, 0x10, 0x2/*V1P2*/);
-//         pmu_set_sleep_clk(0x2, 0x0, 0x1, 0x1/*V1P2*/);
-//     }
-//     else if(pmu_setting_state == PMU_55C) {
-//         pmu_set_active_clk(0x1, 0x0, 0x10, 0x2/*V1P2*/);
-//         pmu_set_sleep_clk(0x1, 0x1, 0x1, 0x1/*V1P2*/);
-//     }
-//     else if(pmu_setting_state == PMU_75C) {
-//         pmu_set_active_clk(0xA, 0x4, 0x7, 0x8/*V1P2*/);
-//         pmu_set_sleep_clk(0x1, 0x1, 0x1, 0x1/*V1P2*/);
-//     }
-//     else if(pmu_setting_state == PMU_95C) {
-//         pmu_set_active_clk(0x7, 0x2, 0x7, 0x4/*V1P2*/);
-//         pmu_set_sleep_clk(0x1, 0x0, 0x1, 0x0/*V1P2*/);
-//     }
-// }
 
 void FLASH_turn_on() {
     set_halt_until_mbus_trx();
@@ -1043,16 +991,6 @@ static void operation_sleep_notimer( void ) {
     // Diable timer
     set_wakeup_timer(0, 0, 0);
     operation_sleep();
-}
-
-// TEMP WAKEUP TIMER FUNCTION
-void set_wakeup_timer_prev17 ( uint32_t timestamp, uint8_t irq_en, uint8_t reset ){
-	uint32_t regval = timestamp;
-	if( irq_en ) regval |= 0x030000; // IRQ in Sleep-Only
-	else		 regval &= 0xFCFFFF;
-    *REG_WUPT_CONFIG = regval;
-
-	if( reset ) *WUPT_RESET = 0x01;
 }
 
 /**********************************************

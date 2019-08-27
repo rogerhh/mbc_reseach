@@ -16,6 +16,10 @@
 #include <unordered_set>
 #include <unordered_map>
 
+#include "json11.hpp"
+
+using namespace json11;
+
 namespace MBC
 {
 bool operator<(std::tm& lhs, std::tm& rhs)
@@ -842,7 +846,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                               "&end_date=" + std::string(last_end_date_str) +
                               "&tz=utc" +
                               "&key=" + std::string(weatherbit_api_key);
-            // std::cout << "url = " << url << "\n";
+            std::cout << "url = " << url << "\n";
             curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
             curl_easy_setopt(curl, CURLOPT_HTTPGET, 1L);
             curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, memory_t::write_callback);
@@ -853,16 +857,106 @@ int get_weather_data(std::vector<WeatherData>& v,
             {
                 std::cout << "Error: " << curl_easy_strerror(res) << "\n";
             }
-            std::cout << "debug: contents = " << data.contents << std::flush << "\n" << data.size << "\n" << std::flush;
+            // std::cout << "debug: contents = " << data.contents << std::flush << "\n" << data.size << "\n" << std::flush;
+
+            std::string err;
+            Json json = Json::parse(data.contents, err);
 
             // parse response
             std::vector<WeatherData> weather_v;
             int lastpos = 0;
             std::string str, source = std::string(data.contents);
-            get_string(str, source, "\"data\":[", lastpos);
+            Json data_json = json["data"];
 
             uint32_t download_count = 0;
 
+            for(const Json& weather_json : data_json.array_items()) {
+                WeatherData weather_data;
+
+                weather_data.data[WeatherData::LATITUDE] = latitude;
+                weather_data.data[WeatherData::LONGITUDE] = longitude;
+
+                weather_data.data[WeatherData::RELATIVE_HUMIDITY] = 
+                    (weather_json["rh"].is_null())?
+                    -1000.0 : weather_json["rh"].number_value();
+                
+                weather_data.data[WeatherData::WIND_SPEED] = 
+                    (weather_json["wind_spd"].is_null())?
+                    -1000.0 : weather_json["wind_spd"].number_value();
+                
+                weather_data.data[WeatherData::VISIBILITY] = 
+                    (weather_json["vis"].is_null())?
+                    -1000.0 : weather_json["vis"].number_value();
+                
+                weather_data.data[WeatherData::SEA_LEVEL_PRESSURE] = 
+                    (weather_json["slp"].is_null())?
+                    -1000.0 : weather_json["slp"].number_value();
+                
+                weather_data.data[WeatherData::PART_OF_THE_DAY] = 
+                    (weather_json["pod"].is_null())?
+                    -1000.0 : weather_json["pod"].number_value();
+                
+                weather_data.data[WeatherData::DNI] = 
+                    (weather_json["dni"].is_null())?
+                    -1000.0 : weather_json["dni"].number_value();
+                
+                weather_data.data[WeatherData::SOLAR_ELEVATION_ANGLE] = 
+                    (weather_json["elev_angle"].is_null())?
+                    -1000.0 : weather_json["elev_angle"].number_value();
+                
+                weather_data.data[WeatherData::PRESSURE] = 
+                    (weather_json["pres"].is_null())?
+                    -1000.0 : weather_json["pres"].number_value();
+                
+                weather_data.data[WeatherData::DEW_POINT] = 
+                    (weather_json["dewpt"].is_null())?
+                    -1000.0 : weather_json["dewpt"].number_value();
+                
+                weather_data.data[WeatherData::SNOWFALL] = 
+                    (weather_json["snow"].is_null())?
+                    -1000.0 : weather_json["snow"].number_value();
+                
+                weather_data.data[WeatherData::UV_INDEX] = 
+                    (weather_json["uv"].is_null())?
+                    -1000.0 : weather_json["uv"].number_value();
+                
+                weather_data.data[WeatherData::WEATHER_CODE] = 
+                    (weather_json["weather"]["code"].is_null())?
+                    -1000.0 : weather_json["weather"]["code"].number_value();
+                
+                weather_data.data[WeatherData::GHI] = 
+                    (weather_json["ghi"].is_null())?
+                    -1000.0 : weather_json["ghi"].number_value();
+                
+                weather_data.data[WeatherData::DHI] = 
+                    (weather_json["dhi"].is_null())?
+                    -1000.0 : weather_json["dhi"].number_value();
+                
+                weather_data.data[WeatherData::SOLAR_AZIMUTH_ANGLE] = 
+                    (weather_json["azimuth"].is_null())?
+                    -1000.0 : weather_json["azimuth"].number_value();
+                
+                weather_data.data[WeatherData::TEMPERATURE] = 
+                    (weather_json["temp"].is_null())?
+                    -1000.0 : weather_json["temp"].number_value();
+                
+                weather_data.data[WeatherData::PRECIPITATION] = 
+                    (weather_json["precip"].is_null())?
+                    -1000.0 : weather_json["precip"].number_value();
+                
+                weather_data.data[WeatherData::CLOUD_COVERAGE] = 
+                    (weather_json["clouds"].is_null())?
+                    -1000.0 : weather_json["clouds"].number_value();
+                
+                weather_data.time = 
+                    (weather_json["ts"].is_null())?
+                    -1000.0 : weather_json["ts"].int_value();
+                
+                weather_v.emplace_back(weather_data);
+                download_count++;
+                
+            }
+            /*
             while(get_string(str, source, "{", lastpos))
             {
                 WeatherData weatherdata;
@@ -1020,6 +1114,7 @@ int get_weather_data(std::vector<WeatherData>& v,
 
                 download_count++;
             }
+        */
 
             std::cout << "Downloaded " << download_count << " data points.\n";
             if(download_count != 168) {
@@ -1079,7 +1174,7 @@ int get_weather_data(std::vector<WeatherData>& v,
                                  std::to_string(week).c_str(),
                                  std::to_string(latitude).c_str(),
                                  std::to_string(longitude).c_str());
-            std::cout << "sql = " << sql << "\n";
+            // std::cout << "sql = " << sql << "\n";
 
             rc = sqlite3_exec(db, sql.c_str(), nullptr, nullptr, &err_msg);
 
@@ -1108,8 +1203,8 @@ int get_weather_data(std::vector<WeatherData>& v,
             for(int i = 0; i < WeatherData::SIZE_OF_DATA_FIELDS; i++)
             {
                 weatherdata.data[i] 
-                    = (row_val[i + 1] != nullptr)? std::stold(std::string(row_val[i + 1])) 
-                                                    : -1000;
+                    = (row_val[i + 1] != nullptr)? std::stod(std::string(row_val[i + 1])) 
+                                                    : -1000.0;
             }
             v.emplace_back(weatherdata);
             return 0;
@@ -1266,6 +1361,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     {
         // if date and location is not in database, call api to retrieve data value from the web
         std::tm date_tm = read_tm_format(date + "-00:00:00", 0);
+        std::cout << "debug: date = " << date << "\n"; 
         std::string date_str = std::to_string(date_tm.tm_year + 1900) + "-" +
                                std::to_string(date_tm.tm_mon + 1) + "-" +
                                std::to_string(date_tm.tm_mday);
@@ -1293,26 +1389,28 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
     std::cout << "debug: read from web\n";
     // std::cout << data.contents << "\n";
 
-    std::string result = std::string(data.contents);
-    if(result.find("\"status\":\"OK\"") == std::string::npos)
-    {
+    // std::string result = std::string(data.contents);
+    std::string err;
+    Json json = Json::parse(data.contents, err);
+    if(json["status"].string_value() != "OK") {
         sqlite3_close(db);
         throw std::runtime_error("Load sunrise-sunset api error\n");
     }
+    /*
+    if(result.find("\"status\":\"OK\"") == std::string::npos)
+    {
+    }
+    */
 
-    std::string str;
-    int lastpos = 0;
-    get_string(str, result, "\"sunrise\":\"", lastpos);
-    get_string(str, result, "\"", lastpos);
-    str = date + "-" + str + ",";
+    std::cout << "debug: " << data.contents << "\n";
+    std::string str = date + "-" + json["results"]["sunrise"].string_value() + ",";
+
     std::cout << "debug: str = " << str << "\n";
     std::tm sunrise_tm = read_tm_string(str, 0);
     std::time_t sunrise_time = timegm(&sunrise_tm);
 
-    get_string(str, result, "\"sunset\":\"", lastpos);
-    get_string(str, result, "\"", lastpos);
-    str = date + "-" + str + ",";
-    // std::cout << "debug: str = " << str << "\n";
+    str = date + "-" + json["results"]["sunset"].string_value() + ",";
+    std::cout << "debug: str = " << str << "\n";
     std::tm sunset_tm = read_tm_string(str, 0);
     std::time_t sunset_time = timegm(&sunset_tm);
 
@@ -1346,7 +1444,7 @@ SunriseSunsetData get_sunrise_sunset_time(const std::string& date,
 
     sqlite3_close(db);
 
-    return SunriseSunsetData(); //(date, latitude, longitude, sunrise_time, sunset_time);
+    return SunriseSunsetData(date, latitude, longitude, sunrise_time, sunset_time);
 }
 
 void sort_volunteer_data(const std::string& start_time_str,

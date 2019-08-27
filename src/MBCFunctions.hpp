@@ -17,6 +17,8 @@ bool operator<(std::tm& lhs, std::tm& rhs);
 bool operator==(std::tm& lhs, std::tm& rhs);
 bool operator<=(std::tm& lhs, std::tm& rhs);
 
+bool reset_tm(std::tm* tm);
+
 // file path to database.db
 static const std::string DATABASE_DB = std::string(mbc_source_dir) + "/data/mbc_database.db";
 static const std::string VOLUNTEER_TABLE = std::string(mbc_source_dir) + "/data/serial_numbers.txt";

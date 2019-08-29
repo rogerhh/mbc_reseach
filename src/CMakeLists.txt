@@ -39,6 +39,6 @@ add_executable(sort_locations.exe
 target_link_libraries(sort_locations.exe
                       libmbc)
 
-add_library(weatherStation SHARED weather_data_module.cpp DataPoint.cpp WeatherData.cpp SunriseSunsetData.cpp json11.cpp MBCFunctions.cpp)
+add_executable(weatherStation weather_data_module.cpp DataPoint.cpp WeatherData.cpp SunriseSunsetData.cpp json11.cpp MBCFunctions.cpp)
 target_link_libraries(weatherStation sqlite3 curl)
 

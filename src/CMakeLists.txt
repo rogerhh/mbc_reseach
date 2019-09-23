@@ -42,3 +42,4 @@ target_link_libraries(sort_locations.exe
 add_executable(weatherStation weather_data_module.cpp DataPoint.cpp WeatherData.cpp SunriseSunsetData.cpp json11.cpp MBCFunctions.cpp)
 target_link_libraries(weatherStation sqlite3 curl)
 
+add_executable(process_electrometer_data.exe process_electrometer_data.cpp)

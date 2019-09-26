@@ -1,6 +1,7 @@
 #include <iostream>
 #include <fstream>
 #include <cmath>
+#include <vector>
 
 using namespace std;
 
@@ -20,8 +21,8 @@ char* read_delim(char* res, char* src, char delim) {
 }
 
 int main(int argc, char** argv) {
-    if(argc != 4) {
-        cout << "Usage: ./process electrometer_data.exe <input file> <start time: hh:mm:ss.ms> <end time: hh:mm:ss.ms>\n";
+    if(argc != 6) {
+        cout << "Usage: ./process electrometer_data.exe <mode> <input file> <start time: hh:mm:ss.ms> <end time: hh:mm:ss.ms> <shortest period>\n";
         return 1;
     }
     ifstream fin(argv[1]);
@@ -42,7 +43,7 @@ int main(int argc, char** argv) {
     sec = atof(res);
     double start_time = hr * 3600 + min * 60 + sec;
     bool start_found = false;
-    double start_data;
+    // double start_data;
 
     end_str = read_delim(res, end_str, ':');
     hr = atof(res);
@@ -52,7 +53,11 @@ int main(int argc, char** argv) {
     sec = atof(res);
     double end_time = hr * 3600 + min * 60 + sec;
     bool end_found = false;
-    double end_data;
+    // double end_data;
+
+    int shortest_period = atoi(argv[4]);
+    vector<pair<double, double>> v;
+    vector<string> str_v;
 
     if(start_time >= end_time) {
         cout << "Error: start time must be less than end time\n";
@@ -74,20 +79,29 @@ int main(int argc, char** argv) {
         sec = atof(res);
         double time = hr * 3600 + min * 60 + sec;
 
-        if(!start_found && time >= start_time && abs(time - start_time) < 1) {
+        if(!start_found && time >= start_time && abs(time - start_time) < 0.5) {
             start_found = true;
-            start_time = time;
-            src_ptr = read_delim(res, src_ptr, ',');
-            start_data = atof(res);
         }
-        if(!end_found && time >= end_time && abs(time - end_time) < 1) {
+
+        if(start_found) {
+            src_ptr = read_delim(res, src_ptr, '\0');
+            v.push_back({time, atof(res)});
+
+            char* time_ptr = src;
+            time_ptr = read_delim(res, time_ptr, ',');
+            time_ptr = read_delim(res, time_ptr, ',');
+
+            str_v.push_back(string(res));
+        }
+
+        if(!end_found && time >= end_time && abs(time - end_time) < 0.5) {
             end_found = true;
-            end_time = time;
-            src_ptr = read_delim(res, src_ptr, ',');
-            end_data = atof(res);
             break;
         }
+
     }
+
+    ofstream fout("out.csv");
 
     if(!start_found) {
         cout << "Error: start time not found\n";
@@ -98,7 +112,42 @@ int main(int argc, char** argv) {
         return 1;
     }
     else {
-        cout << "Average dV/dt = " << (end_data - start_data) / (end_time - start_time) << "\n";
+        int mode = (string(argv[5]) == "SPECIFIC_POINTS")? 0 : 1;
+        if(mode == 1) {
+            double slope = 0, v1 = 0, v2 = 0;
+            string t1, t2;
+            for(int i = 0; i < v.size() - 1; i++) {
+                if(v[i].second - v[i + 1].second > 2) { continue; }
+                t1 = str_v[i];
+                v1 = v[i].second;
+                double min_v = 100;
+                int index = 0;
+
+                for(int j = i + shortest_period; j < v.size(); j++) {
+                    if(v[j].second < min_v) {
+                        min_v = v[j].second;
+                        index = j;
+                    }
+                }
+                slope = (min_v - v1) / (v[index].first - v[i].first);
+                t2 = str_v[index];
+                v2 = min_v;
+                break;
+            }
+            cout << "Minimum slope calculated: " << slope << "\nBetween " 
+                << "t = " << t1 << " and t = " << t2 << "\nFrom "
+                << "v = " << v1 << " to v = " << v2 << "\n";
+            fout << t1 << "," << v1 << "," << t2 << "," << v2 << "," << slope << "\n";
+        }
+        else {
+            double slope, v1 = v.front().second, v2 = v.back().second;
+            string t1 = str_v.front(), t2 = str_v.back();
+            slope = (v2 - v1) / (v.front().second - v.front().second);
+            cout << "Slope calculated: " << slope << "\nBetween "
+                 << "t = " << t1 << " and t = " << t2 << "\nFrom "
+                 << "v = " << v1 << " to v = " << v2 << "\n";
+            fout << t1 << "," << v1 << "," << t2 << "," << v2 << "," << slope << "\n";
+        }
     }
 
     return 0;

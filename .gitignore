@@ -1,8 +1,10 @@
 build/
-data/*
+data/*.db
+data/*.tar
 
 .exe
 .db
+.tar
 
 !data/*.txt
 !data/*.csv

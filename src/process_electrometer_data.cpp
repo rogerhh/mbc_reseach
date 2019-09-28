@@ -25,15 +25,15 @@ int main(int argc, char** argv) {
         cout << "Usage: ./process electrometer_data.exe <mode> <input file> <start time: hh:mm:ss.ms> <end time: hh:mm:ss.ms> <shortest period>\n";
         return 1;
     }
-    ifstream fin(argv[1]);
+    ifstream fin(argv[2]);
     if(!fin.is_open()) {
-        cout << "Error opening file: " << argv[1] << "\n";
+        cout << "Error opening file: " << argv[2] << "\n";
         return 1;
     }
 
     char res[64], src[64];
-    char* start_str = argv[2];
-    char* end_str = argv[3];
+    char* start_str = argv[3];
+    char* end_str = argv[4];
     double hr, min, sec;
     start_str = read_delim(res, start_str, ':');
     hr = atof(res);
@@ -55,7 +55,7 @@ int main(int argc, char** argv) {
     bool end_found = false;
     // double end_data;
 
-    int shortest_period = atoi(argv[4]);
+    int shortest_period = atoi(argv[5]);
     vector<pair<double, double>> v;
     vector<string> str_v;
 
@@ -112,12 +112,12 @@ int main(int argc, char** argv) {
         return 1;
     }
     else {
-        int mode = (string(argv[5]) == "SPECIFIC_POINTS")? 0 : 1;
+        int mode = (string(argv[1]) == "SPECIFIC")? 0 : 1;
         if(mode == 1) {
             double slope = 0, v1 = 0, v2 = 0;
             string t1, t2;
             for(int i = 0; i < v.size() - 1; i++) {
-                if(v[i].second - v[i + 1].second > 2) { continue; }
+                if(v[i].second - v[i + 1].second < 0.0002) { continue; }
                 t1 = str_v[i];
                 v1 = v[i].second;
                 double min_v = 100;
@@ -142,7 +142,7 @@ int main(int argc, char** argv) {
         else {
             double slope, v1 = v.front().second, v2 = v.back().second;
             string t1 = str_v.front(), t2 = str_v.back();
-            slope = (v2 - v1) / (v.front().second - v.front().second);
+            slope = (v2 - v1) / (v.back(). first - v.front().first);
             cout << "Slope calculated: " << slope << "\nBetween "
                  << "t = " << t1 << " and t = " << t2 << "\nFrom "
                  << "v = " << v1 << " to v = " << v2 << "\n";

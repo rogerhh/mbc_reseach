@@ -1,0 +1,122 @@
+%% Flash Read @ 0p6
+v0p6 = [0.6; 0.7];
+figure(1);
+hold off;
+plot(v0p6, cur(1:2), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v0p6, cur(7:8), '-o', 'MarkerFaceColor', 'Blue');
+plot(v0p6(2), cur(14), '-o', 'MarkerFaceColor', 'Red');
+title('Current Draw of Temp Read @ 0P6');
+xlabel('Voltage (V)');
+ylabel('Current (uA)');
+axis([0.55 0.75 0 8]);
+legend('-10C', '20C', '60C');
+grid on;
+
+figure(2);
+hold off;
+plot(v0p6, pow(1:2), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v0p6, pow(7:8), '-o', 'MarkerFaceColor', 'Blue');
+plot(v0p6(2), pow(14), '-o', 'MarkerFaceColor', 'Red');
+title('Power Consumption of Temp Read @ 0P6');
+xlabel('Voltage (V)');
+ylabel('Power (uW)');
+axis([0.55 0.75 0 8]);
+legend('-10C', '20C', '60C');
+grid on;
+
+figure(3);
+hold off;
+plot(v0p6, energy(1:2), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v0p6, energy(7:8), '-o', 'MarkerFaceColor', 'Blue');
+plot(v0p6(2), energy(14), '-o', 'MarkerFaceColor', 'Red');
+title('Energy Consumption of Temp Read @ 0P6');
+xlabel('Voltage (V)');
+ylabel('Energy (uJ)');
+axis([0.55 0.75 0 10]);
+legend('-10C', '20C', '60C');
+grid on;
+
+%% Flash Read @ 1p2
+v = [1.2; 1.4];
+figure(4);
+hold off;
+plot(v, cur(3:4), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v, cur(9:10), '-o', 'MarkerFaceColor', 'Blue');
+plot(v, cur(15:16), '-o', 'MarkerFaceColor', 'Red');
+title('Current Draw of Temp Read @ 1P2');
+xlabel('Voltage (V)');
+ylabel('Current (uA)');
+axis([1.15 1.45 0 30]);
+legend('-10C', '20C', '60C');
+grid on;
+
+figure(5);
+hold off;
+plot(v, pow(3:4), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v, pow(9:10), '-o', 'MarkerFaceColor', 'Blue');
+plot(v, pow(15:16), '-o', 'MarkerFaceColor', 'Red');
+title('Power Consumption of Temp Read @ 1P2');
+xlabel('Voltage (V)');
+ylabel('Power (uW)');
+axis([1.15 1.45 0 30]);
+legend('-10C', '20C', '60C');
+grid on;
+
+figure(6);
+hold off;
+plot(v, energy(3:4), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v, energy(9:10), '-o', 'MarkerFaceColor', 'Blue');
+plot(v, energy(15:16), '-o', 'MarkerFaceColor', 'Red');
+title('Energy Consumption of Temp Read @ 1P2');
+xlabel('Voltage (V)');
+ylabel('Energy (uJ)');
+axis([1.15 1.45 0 55]);
+legend('-10C', '20C', '60C');
+grid on;
+
+%% Flash Read @ 3p6
+v = [3.6; 4.1];
+figure(7);
+hold off;
+plot(v, cur(5:6), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v, cur(11:12), '-o', 'MarkerFaceColor', 'Blue');
+plot(v, cur(17:18), '-o', 'MarkerFaceColor', 'Red');
+title('Current Draw of Temp Read @ 3P6');
+xlabel('Voltage (V)');
+ylabel('Current (uA)');
+axis([3.5 4.2 0 5]);
+legend('-10C', '20C', '60C');
+grid on;
+
+figure(8);
+hold off;
+plot(v, pow(5:6), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v, pow(11:12), '-o', 'MarkerFaceColor', 'Blue');
+plot(v, pow(17:18), '-o', 'MarkerFaceColor', 'Red');
+title('Power Consumption of Temp Read @ 3P6');
+xlabel('Voltage (V)');
+ylabel('Power (uW)');
+axis([3.5 4.2 0 20]);
+legend('-10C', '20C', '60C');
+grid on;
+
+figure(9);
+hold off;
+plot(v, energy(5:6), '-o', 'MarkerFaceColor', 'Green');
+hold on;
+plot(v, energy(11:12), '-o', 'MarkerFaceColor', 'Blue');
+plot(v, energy(17:18), '-o', 'MarkerFaceColor', 'Red');
+title('Energy Consumption of Temp Read @ 3P6');
+xlabel('Voltage (V)');
+ylabel('Energy (uJ)');
+axis([3.5 4.2 0 2]);
+legend('-10C', '20C', '60C');
+grid on;

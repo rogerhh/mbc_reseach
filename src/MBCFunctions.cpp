@@ -1529,8 +1529,7 @@ void sort_volunteer_data(const std::string& start_time_str,
 
     std::string store_sql = "BEGIN TRANSACTION;";
 
-    while(fin >> sn)
-    {
+    while(fin >> sn)    {
         std::tm temp_start = start_time_tm;
         while(temp_start < end_time_tm)
         {

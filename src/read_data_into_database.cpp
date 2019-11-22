@@ -47,7 +47,9 @@ int main (int argc, char** argv)
         // path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_4/" + path;
         // path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_5/" + path;
         // path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_6/" + path;
-        path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_8/" + path;
+        // path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_8/" + path;
+        // path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_9/" + path;
+        path = "/home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_10/" + path;
         
         // get latitude
         get_string(str, line, "o", lastpos);

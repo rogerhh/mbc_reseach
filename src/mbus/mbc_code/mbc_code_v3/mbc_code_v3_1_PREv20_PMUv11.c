@@ -37,6 +37,61 @@
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
 
+// default register values
+volatile prev20_r19_t prev20_r19 = PREv20_R19_DEFAULT;
+
+volatile sntv4_r00_t sntv4_r00 = SNTv4_R00_DEFAULT;
+volatile sntv4_r01_t sntv4_r01 = SNTv4_R01_DEFAULT;
+volatile sntv4_r07_t sntv4_r07 = SNTv4_R07_DEFAULT;
+
+volatile lntv1a_r00_t lntv1a_r00 = LNTv1A_R00_DEFAULT;
+volatile lntv1a_r01_t lntv1a_r01 = LNTv1A_R01_DEFAULT;
+volatile lntv1a_r02_t lntv1a_r02 = LNTv1A_R02_DEFAULT;
+volatile lntv1a_r03_t lntv1a_r03 = LNTv1A_R03_DEFAULT;
+volatile lntv1a_r04_t lntv1a_r04 = LNTv1A_R04_DEFAULT;
+volatile lntv1a_r05_t lntv1a_r05 = LNTv1A_R05_DEFAULT;
+volatile lntv1a_r06_t lntv1a_r06 = LNTv1A_R06_DEFAULT;
+volatile lntv1a_r07_t lntv1a_r07 = LNTv1A_R07_DEFAULT;
+volatile lntv1a_r17_t lntv1a_r17 = LNTv1A_R17_DEFAULT;
+volatile lntv1a_r20_t lntv1a_r20 = LNTv1A_R20_DEFAULT;
+volatile lntv1a_r21_t lntv1a_r21 = LNTv1A_R21_DEFAULT;
+volatile lntv1a_r22_t lntv1a_r22 = LNTv1A_R22_DEFAULT;
+volatile lntv1a_r40_t lntv1a_r40 = LNTv1A_R40_DEFAULT;
+
+volatile mrrv10_r00_t mrrv10_r00 = MRRv10_R00_DEFAULT;
+volatile mrrv10_r01_t mrrv10_r01 = MRRv10_R01_DEFAULT;
+volatile mrrv10_r02_t mrrv10_r02 = MRRv10_R02_DEFAULT;
+volatile mrrv10_r03_t mrrv10_r03 = MRRv10_R03_DEFAULT;
+volatile mrrv10_r04_t mrrv10_r04 = MRRv10_R04_DEFAULT;
+volatile mrrv10_r07_t mrrv10_r07 = MRRv10_R07_DEFAULT;
+volatile mrrv10_r11_t mrrv10_r11 = MRRv10_R11_DEFAULT;
+volatile mrrv10_r12_t mrrv10_r12 = MRRv10_R12_DEFAULT;
+volatile mrrv10_r13_t mrrv10_r13 = MRRv10_R13_DEFAULT;
+volatile mrrv10_r14_t mrrv10_r14 = MRRv10_R14_DEFAULT;
+volatile mrrv10_r15_t mrrv10_r15 = MRRv10_R15_DEFAULT;
+volatile mrrv10_r1F_t mrrv10_r1F = MRRv10_R1F_DEFAULT;
+volatile mrrv10_r21_t mrrv10_r21 = MRRv10_R21_DEFAULT;
+
+//***************************************************
+// Timeout Functions
+//***************************************************
+
+static void set_timer32_timeout(uint32_t val){
+	// Use Timer32 as timeout counter
+    wfi_timeout_flag = 0;
+	config_timer32(val, 1, 0, 0);
+}
+
+static void stop_timer32_timeout_check(uint32_t code){
+	// Turn off Timer32
+	*TIMER32_GO = 0;
+	if (wfi_timeout_flag){
+		wfi_timeout_flag = 0;
+		error_code = code;
+		mbus_write_message32(0xFA, error_code);
+	}
+}
+
 /**********************************************
  * Global variables
  **********************************************
@@ -44,7 +99,7 @@
  * "volatile" should only be used for mmio to ensure memory storage
  */
 volatile uint32_t enumerated;
-volatile uint32_t wakeup_data;
+volatile uint32_t goc_cur_cmd;
 volatile uint8_t wfi_timeout_flag;
 
 volatile uint16_t xo_period;
@@ -79,12 +134,13 @@ volatile uint32_t pmu_active_settings[5];
 volatile uint32_t pmu_sleep_settings[5];
 volatile uint32_t pmu_radio_settings[5];
 
-// default register values
-volatile prev20_r19_t prev20_r19 = PREv20_R19_DEFAULT;
-
-volatile sntv4_r00_t sntv4_r00 = SNTv4_R00_DEFAULT;
-volatile sntv4_r01_t sntv4_r01 = SNTv4_R01_DEFAULT;
-volatile sntv4_r07_t sntv4_r07 = SNTv4_R07_DEFAULT;
+volatile uint32_t radio_ready;
+volatile uint32_t radio_on;
+volatile uint32_t mrr_freq_hopping;
+volatile uint32_t mrr_freq_hopping_step;
+volatile uint32_t mrr_cfo_val_fine_min;
+volatile uint32_t RADIO_PACKET_DELAY;
+volatile uint32_t radio_packet_count;
 
 // Message data structures
 typedef union header{
@@ -196,6 +252,12 @@ void xo_init( void ) {
     // BREAKPOint 0x03
     mbus_write_message32(0xBA, 0x03);
 
+}
+
+void update_xo_counters() {
+    // FIXME: this may be wrong as the timer resets when it gets to the threshold
+    uint32_t timer_val = (*REG_XOT_VAL_U << 16) | (*REG_XOT_VAL_L);
+    xo_sys_time += timer_val;
 }
 
 /*
@@ -830,7 +892,6 @@ static void operation_init( void ) {
     set_halt_until_mbus_tx();
 
     // Global variables
-    wakeup_data = 0;
     wfi_timeout_flag = 0;
 
     xo_period = 60;
@@ -944,26 +1005,16 @@ void handler_ext_int_reg3       (void) __attribute__ ((interrupt ("IRQ")));
 
 void handler_ext_int_wakeup( void ) { // WAKEUP
     *NVIC_ICPR = (0x1 << IRQ_WAKEUP);
-    // Report who woke up
-    delay(MBUS_DELAY);
-    mbus_write_message32(0xAA, *SREG_WAKEUP_SOURCE);
-
 }
 
 void handler_ext_int_gocep( void ) { // GOCEP
     *NVIC_ICPR = (0x1 << IRQ_GOCEP);
-    mbus_write_message32(0xCC, 0x0);
 }
 
 void handler_ext_int_timer32( void ) { // TIMER32
     *NVIC_ICPR = (0x1 << IRQ_TIMER32);
-/*
-    *REG1 = *TIMER32_CNT;
-    *REG2 = *TIMER32_STAT;
-*/
     *TIMER32_STAT = 0x0;
     wfi_timeout_flag = 1;
-    mbus_write_message32(0xDD, 0x0);
 }
 
 void handler_ext_int_reg0( void ) { // REG0
@@ -995,4 +1046,51 @@ int main() {
     // BREAKPOINT 0x00
     mbus_write_message32(0xBA, 0x00);
 
+    if(enumerated != ENUMID) {
+        operation_init();
+        operation_sleep_notimer();
+    }
+
+    // check wakeup is due to GOC
+    if(*SREG_WAKEUP_SOURCE) {
+        if(goc_cur_cmd != 0) {
+            // overriding command
+            mbus_write_message32(0xCA, 0xCCCCCCCC);
+        }
+        goc_cur_cmd = *GOC_DATA_IRQ;
+    }
+
+    uint8_t component = (GOC_DATA_IRQ >> 24) & 0xFF;
+    uint8_t func_id = (GOC_DATA_IRQ >> 16) & 0xFF;
+    uint16_t data = GOC_DATA_IRQ & 0xFFFF;
+
+    if(component == 0x00) {
+    
+    }
+    else if(component == 0x01) {
+    
+    }
+    else if(component == 0x02) {
+    
+    }
+    else if(component == 0x03) {
+    
+    }
+    else if(component == 0x04) {
+    
+    }
+    else if(component == 0x05) {
+    
+    }
+    else if(component == 0x06) {
+    
+    }
+    else if(component == 0x07) {
+    
+    }
+
+    mbus_write_message32(0xED, 0xEEEEEEEE);
+    operation_sleep_notimer();
+    
+    while(1);
 }

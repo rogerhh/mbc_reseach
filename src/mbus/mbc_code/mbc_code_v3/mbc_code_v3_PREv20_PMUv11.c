@@ -949,8 +949,8 @@ inline static void pmu_init() {
                 ((1 << 20) |    // ignore state_horizen; default: 1
                  (0 << 19) |    // state_vbat_read
                  (1 << 13) |    // ignore state_adc_output_ready; default: 0
-                 (1 << 12) |    // ignore state_adc_output_ready; default:0
-                 (1 << 11)));   // ignore state_adc_output_ready; default:0
+                 (1 << 12) |    // ignore state_adc_output_ready; default: 0
+                 (1 << 11)));   // ignore state_adc_output_ready; default: 0
 
     pmu_adc_reset_setting();
     pmu_adc_enable();

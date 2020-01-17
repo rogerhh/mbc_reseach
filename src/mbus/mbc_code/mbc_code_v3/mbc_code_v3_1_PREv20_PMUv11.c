@@ -16,7 +16,7 @@
 #include "../include/SNTv4_RF.h"
 #include "../include/PMUv9_RF.h"
 #include "../include/LNTv1A_RF.h"
-#include "../include/MRRv10_RF.h"
+#include "../include/MRRv7_RF.h"
 #include "../include/mbus.h"
 
 #define PRE_ADDR 0x1
@@ -27,14 +27,14 @@
 #define MEM_ADDR 0x6
 #define ENUMID 0xDEADBEEF
 
-// #define USE_MRR 1
+#define USE_MRR 1
 // #define USE_LNT 1
 #define USE_SNT 1
 // #define USE_PMU 1
 // #define USE_MEM 1
 
 #define MBUS_DELAY 100  // Amount of delay between seccessive messages; 100: 6-7ms
-#define TIMER32_VAL 0x20000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
+#define TIMER32_VAL 0xA0000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
 
 // SNT states
 #define SNT_IDLE        0x0
@@ -42,6 +42,9 @@
 #define SNT_TEMP_START  0x2
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
+
+#define RADIO_PACKET_DELAY 13000  // Amount of delay between radio packets
+#define RADIO_DATA_LENGTH 192
 
 // default register values
 volatile prev20_r19_t prev20_r19 = PREv20_R19_DEFAULT;
@@ -64,19 +67,18 @@ volatile lntv1a_r21_t lntv1a_r21 = LNTv1A_R21_DEFAULT;
 volatile lntv1a_r22_t lntv1a_r22 = LNTv1A_R22_DEFAULT;
 volatile lntv1a_r40_t lntv1a_r40 = LNTv1A_R40_DEFAULT;
 
-volatile mrrv10_r00_t mrrv10_r00 = MRRv10_R00_DEFAULT;
-volatile mrrv10_r01_t mrrv10_r01 = MRRv10_R01_DEFAULT;
-volatile mrrv10_r02_t mrrv10_r02 = MRRv10_R02_DEFAULT;
-volatile mrrv10_r03_t mrrv10_r03 = MRRv10_R03_DEFAULT;
-volatile mrrv10_r04_t mrrv10_r04 = MRRv10_R04_DEFAULT;
-volatile mrrv10_r07_t mrrv10_r07 = MRRv10_R07_DEFAULT;
-volatile mrrv10_r11_t mrrv10_r11 = MRRv10_R11_DEFAULT;
-volatile mrrv10_r12_t mrrv10_r12 = MRRv10_R12_DEFAULT;
-volatile mrrv10_r13_t mrrv10_r13 = MRRv10_R13_DEFAULT;
-volatile mrrv10_r14_t mrrv10_r14 = MRRv10_R14_DEFAULT;
-volatile mrrv10_r15_t mrrv10_r15 = MRRv10_R15_DEFAULT;
-volatile mrrv10_r1F_t mrrv10_r1F = MRRv10_R1F_DEFAULT;
-volatile mrrv10_r21_t mrrv10_r21 = MRRv10_R21_DEFAULT;
+volatile mrrv7_r00_t mrrv7_r00 = MRRv7_R00_DEFAULT;
+volatile mrrv7_r01_t mrrv7_r01 = MRRv7_R01_DEFAULT;
+volatile mrrv7_r02_t mrrv7_r02 = MRRv7_R02_DEFAULT;
+volatile mrrv7_r03_t mrrv7_r03 = MRRv7_R03_DEFAULT;
+volatile mrrv7_r04_t mrrv7_r04 = MRRv7_R04_DEFAULT;
+volatile mrrv7_r07_t mrrv7_r07 = MRRv7_R07_DEFAULT;
+volatile mrrv7_r11_t mrrv7_r11 = MRRv7_R11_DEFAULT;
+volatile mrrv7_r12_t mrrv7_r12 = MRRv7_R12_DEFAULT;
+volatile mrrv7_r13_t mrrv7_r13 = MRRv7_R13_DEFAULT;
+volatile mrrv7_r14_t mrrv7_r14 = MRRv7_R14_DEFAULT;
+volatile mrrv7_r15_t mrrv7_r15 = MRRv7_R15_DEFAULT;
+volatile mrrv7_r1F_t mrrv7_r1F = MRRv7_R1F_DEFAULT;
 
 /**********************************************
  * Global variables
@@ -139,12 +141,12 @@ volatile uint8_t pmu_sar_conversion_ratio;
 volatile uint16_t read_data_batadc;
 volatile uint16_t read_data_batadc_diff;
 
-volatile uint32_t radio_ready;
-volatile uint32_t radio_on;
+volatile uint8_t radio_ready;
+volatile uint8_t radio_on;
+volatile uint32_t radio_data_arr[4];
 volatile uint32_t mrr_freq_hopping;
 volatile uint32_t mrr_freq_hopping_step;
 volatile uint32_t mrr_cfo_val_fine_min;
-volatile uint32_t RADIO_PACKET_DELAY;
 volatile uint32_t radio_packet_count;
 
 // Message data structures
@@ -186,7 +188,7 @@ static void stop_timer32_timeout_check(uint32_t code){
     *TIMER32_GO = 0;
     if (wfi_timeout_flag){
         wfi_timeout_flag = 0;
-        mbus_write_message32(0xFA, code);
+	sys_err(0x04000000);
     }
 }
 
@@ -993,182 +995,129 @@ inline static void pmu_init() {
 }
 
 /**********************************************
- * MRR Functions (MRRv10)
+ * MRR functions (MRRv7)
  **********************************************/
 
-static void mrr_ldo_vref_on(){
-    mrrv10_r04.LDO_EN_VREF    = 1;
-    mbus_remote_register_write(MRR_ADDR,0x4,mrrv10_r04.as_int);
-}
-
-static void mrr_ldo_power_on(){
-    mrrv10_r04.LDO_EN_IREF    = 1;
-    mrrv10_r04.LDO_EN_LDO    = 1;
-    mbus_remote_register_write(MRR_ADDR,0x4,mrrv10_r04.as_int);
-}
-static void mrr_ldo_power_off(){
-    mrrv10_r04.LDO_EN_VREF    = 0;
-    mrrv10_r04.LDO_EN_IREF    = 0;
-    mrrv10_r04.LDO_EN_LDO    = 0;
-    mbus_remote_register_write(MRR_ADDR,0x4,mrrv10_r04.as_int);
+static void reset_radio_data_arr() {
+    uint8_t i;
+    for(i = 0; i < 4; i++) { radio_data_arr[i] = 0; }
 }
 
 static void radio_power_on(){
+    radio_on = 1;
+
     // Turn off PMU ADC
     //pmu_adc_disable();
 
     // Need to speed up sleep pmu clock
     //pmu_set_sleep_radio();
 
-    // New for MRRv10
-    mrr_ldo_vref_on();
-
     // Turn off Current Limter Briefly
-    mrrv10_r00.MRR_CL_EN = 0;  //Enable CL
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+    mrrv7_r00.MRR_CL_EN = 0;  //Enable CL
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     // Set decap to parallel
-    mrrv10_r03.MRR_DCP_S_OW = 0;  //TX_Decap S (forced charge decaps)
-    mbus_remote_register_write(MRR_ADDR,3,mrrv10_r03.as_int);
-    mrrv10_r03.MRR_DCP_P_OW = 1;  //RX_Decap P 
-    mbus_remote_register_write(MRR_ADDR,3,mrrv10_r03.as_int);
+    mrrv7_r03.MRR_DCP_S_OW = 0;  //TX_Decap S (forced charge decaps)
+    mbus_remote_register_write(MRR_ADDR,3,mrrv7_r03.as_int);
+    mrrv7_r03.MRR_DCP_P_OW = 1;  //RX_Decap P 
+    mbus_remote_register_write(MRR_ADDR,3,mrrv7_r03.as_int);
     delay(MBUS_DELAY);
 
     // Set decap to series
-    mrrv10_r03.MRR_DCP_P_OW = 0;  //RX_Decap P 
-    mbus_remote_register_write(MRR_ADDR,3,mrrv10_r03.as_int);
-    mrrv10_r03.MRR_DCP_S_OW = 1;  //TX_Decap S (forced charge decaps)
-    mbus_remote_register_write(MRR_ADDR,3,mrrv10_r03.as_int);
+    mrrv7_r03.MRR_DCP_P_OW = 0;  //RX_Decap P 
+    mbus_remote_register_write(MRR_ADDR,3,mrrv7_r03.as_int);
+    mrrv7_r03.MRR_DCP_S_OW = 1;  //TX_Decap S (forced charge decaps)
+    mbus_remote_register_write(MRR_ADDR,3,mrrv7_r03.as_int);
     delay(MBUS_DELAY);
 
     // Current Limter set-up 
-    mrrv10_r00.MRR_CL_CTRL = 16; //Set CL 1: unlimited, 8: 30uA, 16: 3uA
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
-
-    radio_on = 1;
-
-    // New for MRRv10
-    mrr_ldo_power_on();
+    mrrv7_r00.MRR_CL_CTRL = 16; //Set CL 1: unlimited, 8: 30uA, 16: 3uA
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     // Turn on Current Limter
-    mrrv10_r00.MRR_CL_EN = 1;  //Enable CL
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+    mrrv7_r00.MRR_CL_EN = 1;  //Enable CL
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     // Release timer power-gate
-    mrrv10_r04.RO_EN_RO_V1P2 = 1;  //Use V1P2 for TIMER
-    //mrrv10_r04.RO_EN_RO_LDO = 1;  //Use LDO for TIMER
-    mbus_remote_register_write(MRR_ADDR,0x04,mrrv10_r04.as_int);
+    mrrv7_r04.RO_EN_RO_V1P2 = 1;  //Use V1P2 for TIMER
+    mbus_remote_register_write(MRR_ADDR,0x04,mrrv7_r04.as_int);
     delay(MBUS_DELAY);
 
     // Turn on timer
-    mrrv10_r04.RO_RESET = 0;  //Release Reset TIMER
-    mbus_remote_register_write(MRR_ADDR,0x04,mrrv10_r04.as_int);
+    mrrv7_r04.RO_RESET = 0;  //Release Reset TIMER
+    mbus_remote_register_write(MRR_ADDR,0x04,mrrv7_r04.as_int);
     delay(MBUS_DELAY);
 
-    mrrv10_r04.RO_EN_CLK = 1; //Enable CLK TIMER
-    mbus_remote_register_write(MRR_ADDR,0x04,mrrv10_r04.as_int);
+    mrrv7_r04.RO_EN_CLK = 1; //Enable CLK TIMER
+    mbus_remote_register_write(MRR_ADDR,0x04,mrrv7_r04.as_int);
     delay(MBUS_DELAY);
 
-    mrrv10_r04.RO_ISOLATE_CLK = 0; //Set Isolate CLK to 0 TIMER
-    mbus_remote_register_write(MRR_ADDR,0x04,mrrv10_r04.as_int);
+    mrrv7_r04.RO_ISOLATE_CLK = 0; //Set Isolate CLK to 0 TIMER
+    mbus_remote_register_write(MRR_ADDR,0x04,mrrv7_r04.as_int);
 
     // Release FSM Sleep
-    mrrv10_r11.MRR_RAD_FSM_SLEEP = 0;  // Power on BB
-    mbus_remote_register_write(MRR_ADDR,0x11,mrrv10_r11.as_int);
+    mrrv7_r11.MRR_RAD_FSM_SLEEP = 0;  // Power on BB
+    mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
     delay(MBUS_DELAY*5); // Freq stab
 
 }
 
-static void radio_power_off(){
+static void radio_power_off() {
     // Need to restore sleep pmu clock
 
     // Enable PMU ADC
     //pmu_adc_enable();
 
     // Turn off Current Limter Briefly
-    mrrv10_r00.MRR_CL_EN = 0;  //Enable CL
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+    mrrv7_r00.MRR_CL_EN = 0;  //Enable CL
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     // Current Limter set-up 
-    mrrv10_r00.MRR_CL_CTRL = 16; //Set CL 1: unlimited, 8: 30uA, 16: 3uA
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+    mrrv7_r00.MRR_CL_CTRL = 16; //Set CL 1: unlimited, 8: 30uA, 16: 3uA
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     // Turn on Current Limter
-    mrrv10_r00.MRR_CL_EN = 1;  //Enable CL
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+    mrrv7_r00.MRR_CL_EN = 1;  //Enable CL
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     // Turn off everything
-    mrrv10_r03.MRR_TRX_ISOLATEN = 0;     //set ISOLATEN 0
-    mbus_remote_register_write(MRR_ADDR,0x03,mrrv10_r03.as_int);
+    mrrv7_r03.MRR_TRX_ISOLATEN = 0;     //set ISOLATEN 0
+    mbus_remote_register_write(MRR_ADDR,0x03,mrrv7_r03.as_int);
 
-    mrrv10_r11.MRR_RAD_FSM_EN = 0;  //Stop BB
-    mrrv10_r11.MRR_RAD_FSM_RSTN = 0;  //RST BB
-    mrrv10_r11.MRR_RAD_FSM_SLEEP = 1;
-    mbus_remote_register_write(MRR_ADDR,0x11,mrrv10_r11.as_int);
+    mrrv7_r11.MRR_RAD_FSM_EN = 0;  //Stop BB
+    mrrv7_r11.MRR_RAD_FSM_RSTN = 0;  //RST BB
+    mrrv7_r11.MRR_RAD_FSM_SLEEP = 1;
+    mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
 
-    mrrv10_r04.RO_RESET = 1;  //Release Reset TIMER
-    mrrv10_r04.RO_EN_CLK = 0; //Enable CLK TIMER
-    mrrv10_r04.RO_ISOLATE_CLK = 1; //Set Isolate CLK to 0 TIMER
-    mbus_remote_register_write(MRR_ADDR,0x04,mrrv10_r04.as_int);
-
-    mrr_ldo_power_off();
+    mrrv7_r04.RO_RESET = 1;  //Release Reset TIMER
+    mrrv7_r04.RO_EN_CLK = 0; //Enable CLK TIMER
+    mrrv7_r04.RO_ISOLATE_CLK = 1; //Set Isolate CLK to 0 TIMER
+    mbus_remote_register_write(MRR_ADDR,0x04,mrrv7_r04.as_int);
 
     // Enable timer power-gate
-    mrrv10_r04.RO_EN_RO_V1P2 = 0;  //Use V1P2 for TIMER
-    //mrrv10_r04.RO_EN_RO_LDO = 0;  //Use LDO for TIMER
-    mbus_remote_register_write(MRR_ADDR,0x04,mrrv10_r04.as_int);
+    mrrv7_r04.RO_EN_RO_V1P2 = 0;  //Use V1P2 for TIMER
+    mbus_remote_register_write(MRR_ADDR,0x04,mrrv7_r04.as_int);
 
     radio_on = 0;
     radio_ready = 0;
 
 }
 
+
 static void mrr_configure_pulse_width_long(){
 
-    //mrrv10_r12.MRR_RAD_FSM_TX_PW_LEN = 24; //100us PW
-    //mrrv10_r13.MRR_RAD_FSM_TX_C_LEN = 100; // (PW_LEN+1):C_LEN=1:32
-    //mrrv10_r12.MRR_RAD_FSM_TX_PS_LEN = 49; // PW=PS   
+    //   mrrv7_r12.MRR_RAD_FSM_TX_PW_LEN = 12; //50us PW
+    //   mrrv7_r13.MRR_RAD_FSM_TX_C_LEN = 1105;
+    //   mrrv7_r12.MRR_RAD_FSM_TX_PS_LEN = 25; // PW=PS   
 
-    mrrv10_r12.MRR_RAD_FSM_TX_PW_LEN = 12; //100us PW
-    mrrv10_r13.MRR_RAD_FSM_TX_C_LEN = 1105; // (PW_LEN+1):C_LEN=1:32
-    mrrv10_r12.MRR_RAD_FSM_TX_PS_LEN = 25; // PW=PS   
+    mrrv7_r12.MRR_RAD_FSM_TX_PW_LEN = 24; //50us PW
+    mrrv7_r13.MRR_RAD_FSM_TX_C_LEN = 200;
+    mrrv7_r12.MRR_RAD_FSM_TX_PS_LEN = 49; // PW=PS   
 
-    mbus_remote_register_write(MRR_ADDR,0x12,mrrv10_r12.as_int);
-    mbus_remote_register_write(MRR_ADDR,0x13,mrrv10_r13.as_int);
+    mbus_remote_register_write(MRR_ADDR,0x12,mrrv7_r12.as_int);
+    mbus_remote_register_write(MRR_ADDR,0x13,mrrv7_r13.as_int);
+
 }
-
-/*
-   static void mrr_configure_pulse_width_long_2(){
-
-   mrrv10_r12.MRR_RAD_FSM_TX_PW_LEN = 19; //80us PW
-   mrrv10_r13.MRR_RAD_FSM_TX_C_LEN = 100; // (PW_LEN+1):C_LEN=1:32
-   mrrv10_r12.MRR_RAD_FSM_TX_PS_LEN = 39; // PW=PS   
-
-   mbus_remote_register_write(MRR_ADDR,0x12,mrrv10_r12.as_int);
-   mbus_remote_register_write(MRR_ADDR,0x13,mrrv10_r13.as_int);
-   }
-
-   static void mrr_configure_pulse_width_long_3(){
-
-   mrrv10_r12.MRR_RAD_FSM_TX_PW_LEN = 9; //40us PW
-   mrrv10_r13.MRR_RAD_FSM_TX_C_LEN = 100; // (PW_LEN+1):C_LEN=1:32
-   mrrv10_r12.MRR_RAD_FSM_TX_PS_LEN = 19; // PW=PS   
-
-   mbus_remote_register_write(MRR_ADDR,0x12,mrrv10_r12.as_int);
-   mbus_remote_register_write(MRR_ADDR,0x13,mrrv10_r13.as_int);
-   }
-
-   static void mrr_configure_pulse_width_short(){
-
-   mrrv10_r12.MRR_RAD_FSM_TX_PW_LEN = 0; //4us PW
-   mrrv10_r13.MRR_RAD_FSM_TX_C_LEN = 32; // (PW_LEN+1):C_LEN=1:32
-   mrrv10_r12.MRR_RAD_FSM_TX_PS_LEN = 1; // PW=PS guard interval betwen 0 and 1 pulse
-
-   mbus_remote_register_write(MRR_ADDR,0x12,mrrv10_r12.as_int);
-   mbus_remote_register_write(MRR_ADDR,0x13,mrrv10_r13.as_int);
-   }
-   */
-
 
 static void send_radio_data_mrr_sub1(){
 
@@ -1176,27 +1125,26 @@ static void send_radio_data_mrr_sub1(){
     set_timer32_timeout(TIMER32_VAL);
 
     // Turn on Current Limter
-    mrrv10_r00.MRR_CL_EN = 1;
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+    mrrv7_r00.MRR_CL_EN = 1;
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     // Fire off data
-    mrrv10_r11.MRR_RAD_FSM_EN = 1;  //Start BB
-    mbus_remote_register_write(MRR_ADDR,0x11,mrrv10_r11.as_int);
+    mrrv7_r11.MRR_RAD_FSM_EN = 1;  //Start BB
+    mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
 
     // Wait for radio response
     WFI();
-    mbus_write_message32(0xCC, 0x89ABCDEF);
     stop_timer32_timeout_check(0x3);
 
     // Turn off Current Limter
-    mrrv10_r00.MRR_CL_EN = 0;
-    mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+    mrrv7_r00.MRR_CL_EN = 0;
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
-    mrrv10_r11.MRR_RAD_FSM_EN = 0;
-    mbus_remote_register_write(MRR_ADDR,0x11,mrrv10_r11.as_int);
+    mrrv7_r11.MRR_RAD_FSM_EN = 0;
+    mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
 }
 
-static void send_radio_data_mrr(uint32_t last_packet, uint8_t radio_packet_prefix, uint32_t radio_data){
+static void mrr_send_radio_data(uint8_t last_packet) {
     // Sends 192 bit packet, of which 96b is actual data
     // MRR REG_9: reserved for header
     // MRR REG_A: reserved for header
@@ -1209,39 +1157,34 @@ static void send_radio_data_mrr(uint32_t last_packet, uint8_t radio_packet_prefi
 
     // CRC16 Encoding 
     uint32_t* output_data;
-    //output_data = crcEnc16(((radio_packet_count & 0xFF)<<8) | radio_packet_prefix, (radio_data_2 <<16) | ((radio_data_1 & 0xFFFFFF) >>8), (radio_data_1 << 24) | (radio_data_0 & 0xFFFFFF));
-    output_data = crcEnc16(((read_data_batadc & 0xFF)<<8) | ((radio_packet_prefix & 0xF)<<4) | ((radio_packet_count>>16)&0xF), ((radio_packet_count & 0xFFFF)<<16) | (*REG_CHIP_ID & 0xFFFF), radio_data);
+    // TODO: add temp and voltage restrictions
+    // TODO: figure out how to use this encoding
+    // output_data = crcEnc16()
 
-    mbus_write_message32(0xBB, radio_data);
-    mbus_write_message32(0xBB, radio_packet_prefix);
-
-    // mbus_remote_register_write(MRR_ADDR,0xD,radio_data & 0xFFFFFF);
-    mbus_remote_register_write(MRR_ADDR,0xD,((output_data[2] & 0xFFFF)/*CRC16*/<<8)|(read_data_batadc&0xFF));
-    mbus_remote_register_write(MRR_ADDR,0xE,(*REG_CHIP_ID<<8)|(radio_data>>24));
-    mbus_remote_register_write(MRR_ADDR,0xF,(radio_packet_prefix<<20)|(radio_packet_count&0xFFFFF));
-    // mbus_remote_register_write(MRR_ADDR,0x10,((output_data[2] & 0xFFFF)/*CRC16*/<<8)|(read_data_batadc&0xFF));
-    mbus_remote_register_write(MRR_ADDR,0x10,radio_data & 0xFFFFFF);
-
-    //mbus_remote_register_write(MRR_ADDR,0xD,0xAAAAAA);
-    //mbus_remote_register_write(MRR_ADDR,0xE,0x555555);
-    //mbus_remote_register_write(MRR_ADDR,0xF,0xAAAAAA);
-    //mbus_remote_register_write(MRR_ADDR,0x10,0x555555);
+    if(!radio_on) {
+	radio_power_on();
+    }
+    
+    mbus_remote_register_write(MRR_ADDR,0xD, radio_data_arr[0] & 0xFFFFFF);
+    mbus_remote_register_write(MRR_ADDR,0xE, radio_data_arr[1] & 0xFFFFFF);
+    mbus_remote_register_write(MRR_ADDR,0xF, radio_data_arr[2] & 0xFFFFFF);
+    mbus_remote_register_write(MRR_ADDR,0x10, radio_data_arr[3] & 0xFFFFFF);
 
     if (!radio_ready){
-        radio_ready = 1;
+	radio_ready = 1;
 
-        // Release FSM Reset
-        mrrv10_r11.MRR_RAD_FSM_RSTN = 1;  //UNRST BB
-        mbus_remote_register_write(MRR_ADDR,0x11,mrrv10_r11.as_int);
-        delay(MBUS_DELAY);
+	// Release FSM Reset
+	mrrv7_r11.MRR_RAD_FSM_RSTN = 1;  //UNRST BB
+	mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
+	delay(MBUS_DELAY);
 
-        mrrv10_r03.MRR_TRX_ISOLATEN = 1;     //set ISOLATEN 1, let state machine control
-        mbus_remote_register_write(MRR_ADDR,0x03,mrrv10_r03.as_int);
-        delay(MBUS_DELAY);
+	mrrv7_r03.MRR_TRX_ISOLATEN = 1;     //set ISOLATEN 1, let state machine control
+	mbus_remote_register_write(MRR_ADDR,0x03,mrrv7_r03.as_int);
+	delay(MBUS_DELAY);
 
-        // Current Limter set-up 
-        mrrv10_r00.MRR_CL_CTRL = 1; //Set CL 1: unlimited, 8: 30uA, 16: 3uA
-        mbus_remote_register_write(MRR_ADDR,0x00,mrrv10_r00.as_int);
+	// Current Limter set-up 
+	mrrv7_r00.MRR_CL_CTRL = 1; //Set CL 1: unlimited, 8: 30uA, 16: 3uA
+	mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
 
     }
 
@@ -1250,38 +1193,128 @@ static void send_radio_data_mrr(uint32_t last_packet, uint8_t radio_packet_prefi
     uint32_t num_packets = 1;
     if (mrr_freq_hopping) num_packets = mrr_freq_hopping;
 
-    // New for mrrv10
     mrr_cfo_val_fine = 0x2000;
 
     while (count < num_packets){
 #ifdef DEBUG_MBUS_MSG
-        mbus_write_message32(0xCE, mrr_cfo_val);
+	mbus_write_message32(0xCE, mrr_cfo_val);
 #endif
+	// may be able to remove 2 lines below, GC 1/6/20
+	*TIMERWD_GO = 0x0; // Turn off CPU watchdog timer
+	*REG_MBUS_WD = 0; // Disables Mbus watchdog timer
 
-        *TIMERWD_GO = 0x0; // Turn off CPU watchdog timer
-        *REG_MBUS_WD = 0; // Disables Mbus watchdog timer
-
-        mrrv10_r01.MRR_TRX_CAP_ANTP_TUNE_FINE = mrr_cfo_val_fine; 
-        mrrv10_r01.MRR_TRX_CAP_ANTN_TUNE_FINE = mrr_cfo_val_fine;
-        mbus_remote_register_write(MRR_ADDR,0x01,mrrv10_r01.as_int);
-        send_radio_data_mrr_sub1();
-        mbus_write_message32(0xDD, count);
-        count++;
-        if (count < num_packets){
-            delay(RADIO_PACKET_DELAY);
-        }
-        mrr_cfo_val_fine = mrr_cfo_val_fine + mrr_freq_hopping_step; // 1: 0.8MHz, 2: 1.6MHz step
+	mrrv7_r01.MRR_TRX_CAP_ANTP_TUNE_FINE = mrr_cfo_val_fine; 
+	mrrv7_r01.MRR_TRX_CAP_ANTN_TUNE_FINE = mrr_cfo_val_fine;
+	mbus_remote_register_write(MRR_ADDR,0x01,mrrv7_r01.as_int);
+	send_radio_data_mrr_sub1();
+	count++;
+	if (count < num_packets){
+		delay(RADIO_PACKET_DELAY);
+	}
+	mrr_cfo_val_fine = mrr_cfo_val_fine + mrr_freq_hopping_step; // 1: 0.8MHz, 2: 1.6MHz step
     }
 
     radio_packet_count++;
 
     if (last_packet){
-        radio_ready = 0;
-        radio_power_off();
+	radio_ready = 0;
+	radio_power_off();
     }else{
-        mrrv10_r11.MRR_RAD_FSM_EN = 0;
-        mbus_remote_register_write(MRR_ADDR,0x11,mrrv10_r11.as_int);
+	mrrv7_r11.MRR_RAD_FSM_EN = 0;
+	mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
     }
+}
+
+static inline void mrr_init() {
+    // MRR Settings --------------------------------------
+
+    // Decap in series
+    mrrv7_r03.MRR_DCP_P_OW = 0;  //RX_Decap P 
+    mbus_remote_register_write(MRR_ADDR,3,mrrv7_r03.as_int);
+    mrrv7_r03.MRR_DCP_S_OW = 1;  //TX_Decap S (forced charge decaps)
+    mbus_remote_register_write(MRR_ADDR,3,mrrv7_r03.as_int);
+
+    // Current Limter set-up 
+    mrrv7_r00.MRR_CL_CTRL = 8; //Set CL 1: unlimited, 8: 30uA, 16: 3uA
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
+
+
+    // Turn on Current Limter
+    mrrv7_r00.MRR_CL_EN = 1;  //Enable CL
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
+
+    // Wait for charging decap
+    // config_timerwd(TIMERWD_VAL);
+    // *REG_MBUS_WD = 1500000*3; // default: 1500000
+    delay(MBUS_DELAY*200); // Wait for decap to charge
+
+    mrrv7_r1F.LC_CLK_RING = 0x3;  // ~ 150 kHz
+    mrrv7_r1F.LC_CLK_DIV = 0x3;  // ~ 150 kHz
+    mbus_remote_register_write(MRR_ADDR,0x1F,mrrv7_r1F.as_int);
+
+    //mrr_configure_pulse_width_short();
+    mrr_configure_pulse_width_long();
+
+    //mrr_freq_hopping = 5;
+    //mrr_freq_hopping_step = 4;
+    mrr_freq_hopping = 30;
+    mrr_freq_hopping_step = 0; // determining center freq
+
+    mrr_cfo_val_fine_min = 0x0000;
+
+    // RO setup (SFO)
+    // Adjust Diffusion R
+    mbus_remote_register_write(MRR_ADDR,0x06,0x1000); // RO_PDIFF
+
+    // Adjust Poly R
+    mbus_remote_register_write(MRR_ADDR,0x08,0x400000); // RO_POLY
+
+    // Adjust C
+    mrrv7_r07.RO_MOM = 0x10;
+    mrrv7_r07.RO_MIM = 0x10;
+    mbus_remote_register_write(MRR_ADDR,0x07,mrrv7_r07.as_int);
+
+    // TX Setup Carrier Freq
+    mrrv7_r00.MRR_TRX_CAP_ANTP_TUNE_COARSE = 0x01f;  //ANT CAP 10b unary 830.5 MHz
+    mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
+    mrrv7_r01.MRR_TRX_CAP_ANTN_TUNE_COARSE = 0x01f; //ANT CAP 10b unary 830.5 MHz
+    mrrv7_r01.MRR_TRX_CAP_ANTP_TUNE_FINE = mrr_cfo_val_fine_min;  //ANT CAP 14b unary 830.5 MHz
+    mrrv7_r01.MRR_TRX_CAP_ANTN_TUNE_FINE = mrr_cfo_val_fine_min; //ANT CAP 14b unary 830.5 MHz
+    mbus_remote_register_write(MRR_ADDR,0x01,mrrv7_r01.as_int);
+    mrrv7_r02.MRR_TX_BIAS_TUNE = 0x1FFF;  //Set TX BIAS TUNE 13b // Max 0x1FFF
+    mbus_remote_register_write(MRR_ADDR,0x02,mrrv7_r02.as_int);
+
+    // Turn off RX mode
+    mrrv7_r03.MRR_TRX_MODE_EN = 0; //Set TRX mode
+    mbus_remote_register_write(MRR_ADDR,3,mrrv7_r03.as_int);
+
+    mrrv7_r14.MRR_RAD_FSM_TX_POWERON_LEN = 0; //3bits
+    mrrv7_r15.MRR_RAD_FSM_RX_HDR_BITS = 0x00;  //Set RX header
+    mrrv7_r15.MRR_RAD_FSM_RX_HDR_TH = 0x00;    //Set RX header threshold
+    mrrv7_r15.MRR_RAD_FSM_RX_DATA_BITS = 0x00; //Set RX data 1b
+    mbus_remote_register_write(MRR_ADDR,0x14,mrrv7_r14.as_int);
+    mbus_remote_register_write(MRR_ADDR,0x15,mrrv7_r15.as_int);
+
+    // RAD_FSM set-up 
+    // Using first 48 bits of data as header
+    mbus_remote_register_write(MRR_ADDR,0x09,0x0);
+    mbus_remote_register_write(MRR_ADDR,0x0A,0x0);
+    mbus_remote_register_write(MRR_ADDR,0x0B,0x0);
+    mbus_remote_register_write(MRR_ADDR,0x0C,0x7AC800);
+    mrrv7_r11.MRR_RAD_FSM_TX_H_LEN = 0; //31-31b header (max)
+    mrrv7_r11.MRR_RAD_FSM_TX_D_LEN = RADIO_DATA_LENGTH; //0-skip tx data
+    mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
+
+    mrrv7_r13.MRR_RAD_FSM_TX_MODE = 3; //code rate 0:4 1:3 2:2 3:1(baseline) 4:1/2 5:1/3 6:1/4
+    mbus_remote_register_write(MRR_ADDR,0x13,mrrv7_r13.as_int);
+
+    // Mbus return address
+    mbus_remote_register_write(MRR_ADDR,0x1E,0x1002);
+
+    // Additional delay for charging decap
+    // config_timerwd(TIMERWD_VAL);
+    // *REG_MBUS_WD = 1500000; // default: 1500000
+    delay(MBUS_DELAY*200); // Wait for decap to charge
 }
 
 /**********************************************
@@ -1294,6 +1327,7 @@ static void operation_init( void ) {
 
     *TIMERWD_GO = 0x0; // Turn off CPU watchdog timer
     *REG_MBUS_WD = 0; // Disables Mbus watchdog timer
+    config_timer32(0, 0, 0, 0);
 
     // Enumeration
     enumerated = ENUMID;
@@ -1402,8 +1436,15 @@ static void operation_init( void ) {
 #ifdef USE_LNT
     lnt_init();
 #endif
+
 #ifdef USE_PMU
     pmu_init();
+#endif
+
+#ifdef USE_MRR
+    mrr_init();
+    radio_on = 0;
+    radio_ready = 0;
 #endif
 }
 
@@ -1414,6 +1455,10 @@ static void operation_init( void ) {
 static void operation_sleep( void ) {
     // Reset GOC_DATA_IRQ
     *GOC_DATA_IRQ = 0;
+
+    if(radio_on) {
+    	radio_power_off();
+    }
 
     mbus_sleep_all();
     while(1);
@@ -1495,14 +1540,16 @@ void handler_ext_int_gocep( void ) { // GOCEP
 void handler_ext_int_timer32( void ) { // TIMER32
     *NVIC_ICPR = (0x1 << IRQ_TIMER32);
     *TIMER32_STAT = 0x0;
+    
     wfi_timeout_flag = 1;
+    mbus_write_message32(0xDD, 0xAADDDDD);
 }
 
 void handler_ext_int_xot( void ) { // TIMER32
     *NVIC_ICPR = (0x1 << IRQ_XOT);
     update_system_time();
     set_xo_timer(0, 0, 0, 0);
-    mbus_write_message32(0xDD, 0xDDDDD);
+    mbus_write_message32(0xDD, 0xBBDDDDD);
 }
 
 void handler_ext_int_reg0( void ) { // REG0
@@ -1576,7 +1623,7 @@ int main() {
                     op_counter = 0;
                 }
 
-                if(++op_counter < goc_data) {
+                if(++op_counter <= goc_data) {
                     set_xot_in_sec(0, xo_period, 1, 0);
                 }
             }
@@ -1617,7 +1664,7 @@ int main() {
                     op_counter = 0;
                 }
 
-                if(++op_counter < goc_data) {
+                if(++op_counter <= goc_data) {
                     operation_temp_run();
                     set_xot_in_sec(0, xo_period, 1, 0);
                 }
@@ -1653,7 +1700,7 @@ int main() {
                    op_counter = 0;
                 }
 
-                if(++op_counter < goc_data) {
+                if(++op_counter <= goc_data) {
                     operation_lnt_run();
                     set_xot_in_sec(0, xo_period, 1, 0);
                 }
@@ -1664,7 +1711,7 @@ int main() {
                     op_counter = 0;
                 }
 
-                if(++op_counter < goc_data) {
+                if(++op_counter <= goc_data) {
                     operation_lnt_run();
                     update_xo_period_under_light();
                     set_xot_in_sec(0, xo_period, 1, 0);
@@ -1733,7 +1780,7 @@ int main() {
                     else {
                         // send hello signal
                     }
-                    set_xot_in_sec(0, mrr_signal_period, 0, 1);
+                    set_xot_in_sec(0, mrr_signal_period, 1, 0);
                 }
             }
             else if(goc_func_id == 0x02) {}
@@ -1752,13 +1799,31 @@ int main() {
                     op_counter = 0;
                 }
 
-                if(++op_counter < goc_data) {
+                if(++op_counter <= goc_data) {
                     set_xot_in_sec(0, mrr_signal_period, 1, 0);
                     // send out signal
+		    reset_radio_data_arr();
+		    radio_data_arr[0] = 0xDEADBEEF;
+		    mrr_send_radio_data(1);
                 }
             }
             else if(goc_func_id == 0x07) {
                 // radio out the first goc_data - 1 words in the mem layer
+            }
+            else if(goc_func_id == 0x08) {
+                if(!goc_state) {
+                    goc_state++;
+                    op_counter = 0;
+                }
+
+                if(++op_counter <= goc_data) {
+		    operation_temp_run();
+		    reset_radio_data_arr();
+		    radio_data_arr[0] = snt_sys_temp;
+                    // send out signal
+		    mrr_send_radio_data(1);
+                    set_xot_in_sec(0, mrr_signal_period, 1, 0);
+                }
             }
         }
         else if(goc_component == 0x05) {

@@ -30,7 +30,7 @@
 #define USE_MRR 1
 // #define USE_LNT 1
 #define USE_SNT 1
-// #define USE_PMU 1
+#define USE_PMU 1
 // #define USE_MEM 1
 
 #define MBUS_DELAY 100  // Amount of delay between seccessive messages; 100: 6-7ms
@@ -743,6 +743,8 @@ static void pmu_set_active_clk(uint32_t setting) {
     uint8_t base = (setting >> 8) & 0xFF;
     uint8_t l_1p2 = setting & 0xFF;
 
+    mbus_write_message32(0xDE, setting);
+
     // The first register write to PMU needs to be repeated
     // Register 0x16: V1P2 ACTIVE
     pmu_reg_write(0x16,         // PMU_EN_SAR_TRIM_V3_ACTIVE
@@ -827,10 +829,11 @@ inline static void pmu_set_sleep_low() {
 
 static void pmu_setting_temp_based() {
     int i;
+    snt_sys_temp = 20;	// FIXME: set this to the data from the temp meas
     for(i = 0; i < 5; i++) {
         if(i == 4 || snt_sys_temp < pmu_temp_thresh[i]) {
             pmu_set_active_clk(pmu_active_settings[i]);
-            pmu_set_active_clk(pmu_sleep_settings[i]);
+            pmu_set_sleep_clk(pmu_sleep_settings[i]);
             break;
         }
     }
@@ -840,13 +843,13 @@ static void pmu_set_sar_conversion_ratio() {
     int i;
     for(i = 0; i < 2; i++) {
         pmu_reg_write(0x05,         // PMU_EN_SAR_RATIO_OVERRIDE; default: 12'h000
-                    ((0 << 13) |    // enable override setting [12] (1'b1)
+                    ((1 << 13) |    // enable override setting [12] (1'b1)
                      (0 << 12) |    // let vdd_clk always connect to vbat
                      (1 << 11) |    // enable override setting [10] (1'h0)
                      (0 << 10) |    // have the converter have the periodic reset (1'h0)
-                     (0 <<  9) |    // enable override setting [8:0] (1'h0)
+                     (1 <<  9) |    // enable override setting [8:0] (1'h0)
                      (0 <<  8) |    // switch input / output power rails for upconversion (1'h0)
-                     (0 <<  7) |    // enable override setting [6:0] (1'h0)
+                     (1 <<  7) |    // enable override setting [6:0] (1'h0)
                      (pmu_sar_conversion_ratio)));  // binary converter's conversion ratio (7'h00)
     }
 }
@@ -940,11 +943,12 @@ inline static void pmu_adc_enable() {
 }
 
 inline static void pmu_adc_read_latest() {
+    // FIXME: this is weird. Readings are higher when ext_bat is lower
     // Grab latest pmu adc readings 
     // PMU register read is handled differently
     pmu_reg_write(0x00, 0x03);
     // Updated for pmuv9
-    read_data_batadc = *REG0 & 0xFF;
+    read_data_batadc = *REG0 & 0xFFFF;
 
     if(read_data_batadc < mrr_volt_thresh) {
         read_data_batadc_diff = 0;
@@ -1399,7 +1403,7 @@ static void operation_init( void ) {
     pmu_temp_thresh[1] = 10;
     pmu_temp_thresh[2] = 25;
     pmu_temp_thresh[3] = 65;
-    pmu_sar_conversion_ratio = 0x2F;
+    pmu_sar_conversion_ratio = 0x32;
     pmu_active_settings[0] = 0x0D021004;    // TODO: update this
     pmu_active_settings[1] = 0x0D021004;    // PMU10C
     pmu_active_settings[2] = 0x05011002;    // PMU25C
@@ -1861,12 +1865,12 @@ int main() {
                 pmu_set_sar_conversion_ratio();
             }
             else if(goc_func_id == 0x04) {
-                mem_write_data &= 0x0000FFFF;
-                mem_write_data |= goc_data << 16;
+                pmu_setting_val &= 0x0000FFFF;
+                pmu_setting_val |= goc_data << 16;
             }
             else if(goc_func_id == 0x05) {
-                mem_write_data &= 0xFFFF0000;
-                mem_write_data |= goc_data;
+                pmu_setting_val &= 0xFFFF0000;
+                pmu_setting_val |= goc_data;
             }
             else if(goc_func_id == 0x06) {
                 if(goc_data > 0) {

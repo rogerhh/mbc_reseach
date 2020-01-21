@@ -27,11 +27,11 @@
 #define MEM_ADDR 0x6
 #define ENUMID 0xDEADBEEF
 
-#define USE_MRR 1
-// #define USE_LNT 1
-#define USE_SNT 1
-#define USE_PMU 1
-// #define USE_MEM 1
+// #define USE_MRR
+#define USE_LNT
+// #define USE_SNT
+// #define USE_PMU
+// #define USE_MEM
 
 #define MBUS_DELAY 100  // Amount of delay between seccessive messages; 100: 6-7ms
 #define TIMER32_VAL 0xA0000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
@@ -117,10 +117,10 @@ volatile uint8_t temp_data_valid;
 volatile uint16_t lnt_thresh_data;
 volatile uint16_t lnt_upper_thresh[3];
 volatile uint16_t lnt_lower_thresh[3];
-volatile uint16_t lnt_sys_light;
-volatile uint16_t lnt_last_light;
-volatile uint8_t light_data_valid;
+volatile uint8_t lnt_start_meas;
 volatile uint8_t lnt_cur_level;
+volatile uint64_t lnt_sys_light;
+volatile uint64_t lnt_last_light;
 
 volatile uint32_t mem_addr;
 volatile uint32_t mem_write_data;
@@ -469,6 +469,143 @@ static void operation_temp_run() {
  **********************************************/
 
 inline static void lnt_init() {
+    //////// TIMER OPERATION //////////
+    
+    // TIMER TUNING  
+    lntv1a_r22.TMR_S = 0x1; // Default: 0x4
+    lntv1a_r22.TMR_DIFF_CON = 0x3FFD; // Default: 0x3FFB
+    lntv1a_r22.TMR_POLY_CON = 0x1; // Default: 0x1
+    mbus_remote_register_write(LNT_ADDR,0x22,lntv1a_r22.as_int);
+    delay(MBUS_DELAY*10);
+    
+    lntv1a_r21.TMR_SEL_CAP = 0x80; // Default : 8'h8
+    lntv1a_r21.TMR_SEL_DCAP = 0x3F; // Default : 6'h4
+    lntv1a_r21.TMR_EN_TUNE1 = 0x1; // Default : 1'h1
+    lntv1a_r21.TMR_EN_TUNE2 = 0x1; // Default : 1'h1
+    mbus_remote_register_write(LNT_ADDR,0x21,lntv1a_r21.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // Enable Frequency Monitoring 
+    lntv1a_r40.WUP_ENABLE_CLK_SLP_OUT = 0x0; 
+    mbus_remote_register_write(LNT_ADDR,0x40,lntv1a_r40.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // TIMER SELF_EN Disable 
+    lntv1a_r21.TMR_SELF_EN = 0x0; // Default : 0x1
+    mbus_remote_register_write(LNT_ADDR,0x21,lntv1a_r21.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // EN_OSC 
+    lntv1a_r20.TMR_EN_OSC = 0x1; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x20,lntv1a_r20.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // Release Reset 
+    lntv1a_r20.TMR_RESETB = 0x1; // Default : 0x0
+    lntv1a_r20.TMR_RESETB_DIV = 0x1; // Default : 0x0
+    lntv1a_r20.TMR_RESETB_DCDC = 0x1; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x20,lntv1a_r20.as_int);
+    delay(2000); 
+    
+    // TIMER EN_SEL_CLK Reset 
+    lntv1a_r20.TMR_EN_SELF_CLK = 0x1; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x20,lntv1a_r20.as_int);
+    delay(10); 
+    
+    // TIMER SELF_EN 
+    lntv1a_r21.TMR_SELF_EN = 0x1; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x21,lntv1a_r21.as_int);
+    delay(100000); 
+    
+    // TIMER EN_SEL_CLK Reset 
+    lntv1a_r20.TMR_EN_OSC = 0x0; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x20,lntv1a_r20.as_int);
+    delay(100);
+    
+    //////// CLOCK DIVIDER OPERATION //////////
+    
+    // Run FDIV
+    lntv1a_r17.FDIV_RESETN = 0x1; // Default : 0x0
+    lntv1a_r17.FDIV_CTRL_FREQ = 0x8; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x17,lntv1a_r17.as_int);
+    delay(MBUS_DELAY*10);
+    
+    //////// LNT SETTING //////////
+    
+    // Bias Current
+    lntv1a_r01.CTRL_IBIAS_VBIAS = 0x7; // Default : 0x7
+    lntv1a_r01.CTRL_IBIAS_I = 0x2; // Default : 0x8
+    lntv1a_r01.CTRL_VOFS_CANCEL = 0x1; // Default : 0x1
+    mbus_remote_register_write(LNT_ADDR,0x01,lntv1a_r01.as_int);
+    delay(MBUS_DELAY*10);
+    	 
+    // Vbase regulation voltage
+    lntv1a_r02.CTRL_VREF_PV_V = 0x1; // Default : 0x2
+    mbus_remote_register_write(LNT_ADDR,0x02,lntv1a_r02.as_int);
+    delay(MBUS_DELAY*10);
+    	
+    // Set LNT Threshold
+    lntv1a_r05.THRESHOLD_HIGH = 0x30; // Default : 12'd40
+    lntv1a_r05.THRESHOLD_LOW = 0x10; // Default : 12'd20
+    mbus_remote_register_write(LNT_ADDR,0x05,lntv1a_r05.as_int);
+    
+    // Monitor AFEOUT
+    lntv1a_r06.OBSEN_AFEOUT = 0x0; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x06,lntv1a_r06.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // Change Counting Time 
+    lntv1a_r03.TIME_COUNTING = 0xFFFFFF; // Default : 0x258
+    mbus_remote_register_write(LNT_ADDR,0x03,lntv1a_r03.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // Change Monitoring & Hold Time 
+    lntv1a_r04.TIME_MONITORING = 0x00A; // Default : 0x010
+    mbus_remote_register_write(LNT_ADDR,0x04,lntv1a_r04.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // Release LDC_PG 
+    lntv1a_r00.LDC_PG = 0x0; // Default : 0x1
+    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // Release LDC_ISOLATE
+    lntv1a_r00.LDC_ISOLATE = 0x0; // Default : 0x1
+    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    delay(MBUS_DELAY*10);
+}
+
+static void lnt_start() {
+    // Release Reset 
+    lntv1a_r00.RESET_AFE = 0x0; // Defhttps://www.dropbox.com/s/yh15ux4h8141vu4/ISSCC2019-Digest.pdf?dl=0ault : 0x1
+    lntv1a_r00.RESETN_DBE = 0x1; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // LNT Start
+    lntv1a_r00.DBE_ENABLE = 0x1; // Default : 0x0
+    lntv1a_r00.WAKEUP_WHEN_DONE = 0x0; // Default : 0x0
+    lntv1a_r00.MODE_CONTINUOUS = 0x0; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    delay(MBUS_DELAY*10);
+}
+
+static void lnt_stop() {
+    // Release Reset 
+    lntv1a_r00.RESET_AFE = 0x0; // Defhttps://www.dropbox.com/s/yh15ux4h8141vu4/ISSCC2019-Digest.pdf?dl=0ault : 0x1
+    lntv1a_r00.RESETN_DBE = 0x1; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    delay(MBUS_DELAY*10);
+    
+    // LNT Start
+    lntv1a_r00.DBE_ENABLE = 0x1; // Default : 0x0
+    lntv1a_r00.WAKEUP_WHEN_DONE = 0x0; // Default : 0x0
+    lntv1a_r00.MODE_CONTINUOUS = 0x0; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    delay(MBUS_DELAY*10);
+}
+
+inline static void lnt_init_old() {
     // Config Register A
     lntv1a_r22.TMR_S = 0x1; // Default: 0x4
     lntv1a_r22.TMR_DIFF_CON = 0x3FFD; // Default: 0x3FFB
@@ -588,7 +725,6 @@ inline static void lnt_init() {
 static void operation_lnt_run() {
     lnt_last_light = lnt_sys_light;
     lnt_sys_light = 0;
-    light_data_valid = 1;
 }
 
 static void update_xo_period_under_light() {
@@ -1389,6 +1525,7 @@ static void operation_init( void ) {
     lnt_lower_thresh[2] = 3000;
 
     lnt_cur_level = 0;
+    lnt_start_meas = 0;
 
     mem_addr = 0;
     mem_write_data = 0;
@@ -1437,19 +1574,24 @@ static void operation_init( void ) {
     operation_temp_run();
 #endif
 
+    mbus_write_message32(0xE2, 0xDDAADD);
 #ifdef USE_LNT
     lnt_init();
 #endif
+    mbus_write_message32(0xE3, 0xDDAADD);
 
 #ifdef USE_PMU
     pmu_init();
 #endif
 
 #ifdef USE_MRR
+    mbus_write_message32(0xEE, 0xDDAADD);
     mrr_init();
     radio_on = 0;
     radio_ready = 0;
+    mbus_write_message32(0xEE, 0xDDAADD);
 #endif
+    mbus_write_message32(0xE4, 0xDDAADD);
 }
 
 /**********************************************
@@ -1460,9 +1602,11 @@ static void operation_sleep( void ) {
     // Reset GOC_DATA_IRQ
     *GOC_DATA_IRQ = 0;
 
+#ifdef USE_MRR
     if(radio_on) {
     	radio_power_off();
     }
+#endif
 
     mbus_sleep_all();
     while(1);
@@ -1529,10 +1673,6 @@ void handler_ext_int_wakeup( void ) { // WAKEUP
 	// update_xo_counters(get_timer_cnt());
 	// xot_last_timer_val -= get_timer_cnt();
     }
-    else if(*SREG_WAKEUP_SOURCE & 0b100) {
-    	// update_xo_counters(xot_last_timer_val);
-	set_xo_timer(0, 0, 0, 0);
-    }
     mbus_write_message32(0xCA, xo_day_time >> 15);
 }
 
@@ -1552,7 +1692,6 @@ void handler_ext_int_timer32( void ) { // TIMER32
 void handler_ext_int_xot( void ) { // TIMER32
     *NVIC_ICPR = (0x1 << IRQ_XOT);
     update_system_time();
-    set_xo_timer(0, 0, 0, 0);
     mbus_write_message32(0xDD, 0xBBDDDDD);
 }
 
@@ -1589,6 +1728,8 @@ int main() {
         operation_init();
         operation_sleep_notimer();
     }
+
+    set_xo_timer(0, 0, 0, 0);
 
     sys_run_continuous = 0;
     do {
@@ -1682,7 +1823,12 @@ int main() {
                 }
             }
             else if(goc_func_id == 0x01) {
-                operation_lnt_run();
+                // operation_lnt_run();
+		lnt_stop();
+		mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
+		lnt_sys_light = ((*REG1 & 0xFFFFFF) << 24) | (*REG0);
+		mbus_write_message32(0xD2, (lnt_sys_light >> 24) & 0xFFFFFF);
+		mbus_write_message32(0xD2, lnt_sys_light & 0xFFFFFF);
             }
             else if(goc_func_id == 0x02) {
                 lnt_thresh_data = goc_data;
@@ -1705,8 +1851,11 @@ int main() {
                 }
 
                 if(++op_counter <= goc_data) {
-                    operation_lnt_run();
+		    mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
+		    lnt_sys_light = ((*REG1 & 0x7FFFFF) << 24) | (*REG0);
                     set_xot_in_sec(0, xo_period, 1, 0);
+		    mbus_write_message32(0xD2, (lnt_sys_light >> 24) & 0xFFFFFF);
+		    mbus_write_message32(0xD2, lnt_sys_light & 0xFFFFFF);
                 }
             }
             else if(goc_func_id == 0x05) {
@@ -1912,6 +2061,7 @@ int main() {
         }
     } while(sys_run_continuous);
 
+    if(lnt_start_meas) { lnt_start(); }
     mbus_write_message32(0xED, 0xEEEEEEEE);
     operation_sleep_with_xo_cnt();
     

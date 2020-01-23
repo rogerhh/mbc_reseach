@@ -27,11 +27,11 @@
 #define MEM_ADDR 0x6
 #define ENUMID 0xDEADBEEF
 
-// #define USE_MRR
+#define USE_MRR
 #define USE_LNT
-// #define USE_SNT
-// #define USE_PMU
-// #define USE_MEM
+#define USE_SNT
+#define USE_PMU
+#define USE_MEM
 
 #define MBUS_DELAY 100  // Amount of delay between seccessive messages; 100: 6-7ms
 #define TIMER32_VAL 0xA0000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
@@ -42,6 +42,10 @@
 #define SNT_TEMP_START  0x2
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
+
+#define LNT_MEAS_TIME 10
+#define PMU_SETTING_TIME 10
+#define SNT_TEMP_UPDATE_TIME 300
 
 #define RADIO_PACKET_DELAY 13000  // Amount of delay between radio packets
 #define RADIO_DATA_LENGTH 192
@@ -97,6 +101,7 @@ uint8_t goc_state;
 uint16_t goc_data;
 
 volatile uint16_t xo_period;
+volatile uint16_t xo_next_timer_val;
 volatile uint16_t xo_interval[4];
 volatile uint32_t xo_data32;
 volatile uint32_t xo_sys_time;
@@ -112,13 +117,14 @@ volatile uint32_t snt_const_a;
 volatile uint32_t snt_const_b;
 volatile uint16_t snt_sys_temp;
 volatile uint8_t snt_state;
+volatile uint8_t snt_update_temp;
 volatile uint8_t temp_data_valid;
 
+volatile uint8_t lnt_start_meas;
+volatile uint8_t lnt_cur_level;
 volatile uint16_t lnt_thresh_data;
 volatile uint16_t lnt_upper_thresh[3];
 volatile uint16_t lnt_lower_thresh[3];
-volatile uint8_t lnt_start_meas;
-volatile uint8_t lnt_cur_level;
 volatile uint64_t lnt_sys_light;
 volatile uint64_t lnt_last_light;
 
@@ -137,9 +143,11 @@ volatile uint32_t pmu_temp_thresh[4];
 volatile uint32_t pmu_active_settings[5];
 volatile uint32_t pmu_sleep_settings[5];
 volatile uint32_t pmu_radio_settings[5];
-volatile uint8_t pmu_sar_conversion_ratio;
 volatile uint16_t read_data_batadc;
 volatile uint16_t read_data_batadc_diff;
+volatile uint8_t pmu_use_radio_setting;
+volatile uint8_t pmu_sar_conversion_ratio;
+volatile uint8_t pmu_sar_ratio_radio;
 
 volatile uint8_t radio_ready;
 volatile uint8_t radio_on;
@@ -245,28 +253,28 @@ void xo_init( void ) {
     prev20_r19.XO_SLEEP = 0x0;
     *REG_XO_CONF1 = prev20_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
-    delay(1000); // >= 1ms
+    delay(10000); // >= 1ms
 
     prev20_r19.XO_ISOLATE = 0x0;
     *REG_XO_CONF1 = prev20_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
-    delay(1000); // >= 1ms
+    delay(10000); // >= 1ms
 
     prev20_r19.XO_DRV_START_UP = 0x1;
     *REG_XO_CONF1 = prev20_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
-    delay(10000); // >= 1s
+    delay(30000); // >= 1s
 
     prev20_r19.XO_SCN_CLK_SEL = 0x1;
     *REG_XO_CONF1 = prev20_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
-    delay(300); // >= 300us
+    delay(3000); // >= 300us
 
     prev20_r19.XO_SCN_CLK_SEL = 0x0;
     prev20_r19.XO_SCN_ENB     = 0x0;
     *REG_XO_CONF1 = prev20_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
-    delay(10000);  // >= 1s
+    delay(30000);  // >= 1s
 
     prev20_r19.XO_DRV_START_UP = 0x0;
     prev20_r19.XO_DRV_CORE     = 0x1;
@@ -963,19 +971,7 @@ inline static void pmu_set_sleep_low() {
     // pmu_set_sleep_clk(0x2, 0x1, 0x1, 0x1/*V1P2*/);
 }
 
-static void pmu_setting_temp_based() {
-    int i;
-    snt_sys_temp = 20;	// FIXME: set this to the data from the temp meas
-    for(i = 0; i < 5; i++) {
-        if(i == 4 || snt_sys_temp < pmu_temp_thresh[i]) {
-            pmu_set_active_clk(pmu_active_settings[i]);
-            pmu_set_sleep_clk(pmu_sleep_settings[i]);
-            break;
-        }
-    }
-}
-
-static void pmu_set_sar_conversion_ratio() {
+static void pmu_set_sar_conversion_ratio(uint8_t ratio) {
     int i;
     for(i = 0; i < 2; i++) {
         pmu_reg_write(0x05,         // PMU_EN_SAR_RATIO_OVERRIDE; default: 12'h000
@@ -986,14 +982,33 @@ static void pmu_set_sar_conversion_ratio() {
                      (1 <<  9) |    // enable override setting [8:0] (1'h0)
                      (0 <<  8) |    // switch input / output power rails for upconversion (1'h0)
                      (1 <<  7) |    // enable override setting [6:0] (1'h0)
-                     (pmu_sar_conversion_ratio)));  // binary converter's conversion ratio (7'h00)
+                     (ratio)));  // binary converter's conversion ratio (7'h00)
+    }
+}
+
+static void pmu_setting_temp_based() {
+    int i;
+    snt_sys_temp = 20;	// FIXME: set this to the data from the temp meas
+    for(i = 0; i < 5; i++) {
+        if(i == 4 || snt_sys_temp < pmu_temp_thresh[i]) {
+	    if(pmu_use_radio_setting > 0) {
+		pmu_set_sar_conversion_ratio(pmu_sar_ratio_radio);
+	        pmu_set_active_clk(pmu_radio_settings[i]);
+	    }
+	    else {
+		pmu_set_sar_conversion_ratio(pmu_sar_conversion_ratio);
+		pmu_set_active_clk(pmu_active_settings[i]);
+	    }
+            pmu_set_sleep_clk(pmu_sleep_settings[i]);
+            break;
+        }
     }
 }
 
 inline static void pmu_set_clk_init() {
     pmu_setting_temp_based();
     // Use the new reset scheme in PMUv3
-    pmu_set_sar_conversion_ratio();
+    pmu_set_sar_conversion_ratio(pmu_sar_conversion_ratio);
 }
 
 inline static void pmu_adc_reset_setting() {
@@ -1094,24 +1109,21 @@ inline static void pmu_adc_read_latest() {
     }
 }
 
-inline static void pmu_reset_solar_short() {
+inline static void pmu_enable_4V_harvesting() {
     // Updated for PMUv9
-    int i;
-    for(i = 0; i < 2; i++) {
-        pmu_reg_write(0x0E,         // PMU_EN_VOLTAGE_CLAMP_TRIM
-                    ((0 << 12) |    // 1: solar short by latched vbat_high (new); 0: follow [10] setting
-                     (1 << 11) |    // Reset of vbat_high latch for [12]=1
-                     (1 << 10) |    // When to turn on harvester-inhibiting switch (0: PoR, 1: VBAT high)
-                     (1 <<  9) |    // Enable override setting [8]
-                     (0 <<  8) |    // Turn on the harvester-inhibiting switch
-                     (3 <<  4) |    // clamp_tune_bottom (increases clamp thresh)
-                     (0)));         // clamp_tune_top (decreases clamp thresh)
-    }
+    pmu_reg_write(0x0E,         // PMU_EN_VOLTAGE_CLAMP_TRIM
+                ((0 << 12) |    // 1: solar short by latched vbat_high (new); 0: follow [10] setting
+                 (0 << 11) |    // Reset of vbat_high latch for [12]=1
+                 (1 << 10) |    // When to turn on harvester-inhibiting switch (0: PoR, 1: VBAT high)
+                 (0 <<  9) |    // Enable override setting [8]
+                 (0 <<  8) |    // Turn on the harvester-inhibiting switch
+                 (3 <<  4) |    // clamp_tune_bottom (increases clamp thresh)
+                 (0)));         // clamp_tune_top (decreases clamp thresh)
 }
 
 inline static void pmu_init() {
     pmu_set_clk_init();
-    pmu_reset_solar_short();
+    pmu_enable_4V_harvesting();
 
     // New for PMUv9
     // VBAT_READ_TRIM Register
@@ -1471,20 +1483,21 @@ static void operation_init( void ) {
 
     // Enumeration
     enumerated = ENUMID;
-#ifdef USE_SNT
-    mbus_enumerate(SNT_ADDR);
-    delay(MBUS_DELAY);
-#endif
-#ifdef USE_LNT
-    mbus_enumerate(LNT_ADDR);
-    delay(MBUS_DELAY);
-#endif
+
 #ifdef USE_MEM
     mbus_enumerate(MEM_ADDR);
     delay(MBUS_DELAY);
 #endif
 #ifdef USE_MRR
     mbus_enumerate(MRR_ADDR);
+    delay(MBUS_DELAY);
+#endif
+#ifdef USE_LNT
+    mbus_enumerate(LNT_ADDR);
+    delay(MBUS_DELAY);
+#endif
+#ifdef USE_SNT
+    mbus_enumerate(SNT_ADDR);
     delay(MBUS_DELAY);
 #endif
 #ifdef USE_PMU
@@ -1515,6 +1528,7 @@ static void operation_init( void ) {
     snt_sys_temp = 25;
     snt_state = SNT_IDLE;
     temp_data_valid = 0;
+    snt_update_temp = 0b01;
 
     lnt_upper_thresh[0] = 500;
     lnt_upper_thresh[1] = 2000;
@@ -1541,6 +1555,8 @@ static void operation_init( void ) {
     pmu_temp_thresh[2] = 25;
     pmu_temp_thresh[3] = 65;
     pmu_sar_conversion_ratio = 0x32;
+    pmu_sar_ratio_radio = 0x36;
+    pmu_use_radio_setting = 0;
     pmu_active_settings[0] = 0x0D021004;    // TODO: update this
     pmu_active_settings[1] = 0x0D021004;    // PMU10C
     pmu_active_settings[2] = 0x05011002;    // PMU25C
@@ -1551,17 +1567,22 @@ static void operation_init( void ) {
     pmu_sleep_settings[2] = 0x02010101;
     pmu_sleep_settings[3] = 0x02000101;
     pmu_sleep_settings[4] = 0x01010101;
-    pmu_radio_settings[0] = 0x00000000;
-    pmu_radio_settings[1] = 0x00000000;
-    pmu_radio_settings[2] = 0x00000000;
-    pmu_radio_settings[3] = 0x00000000;
-    pmu_radio_settings[4] = 0x00000000;
+    pmu_radio_settings[0] = 0x07021004;	    // TODO: update these
+    pmu_radio_settings[1] = 0x07021004;
+    pmu_radio_settings[2] = 0x07021004;
+    pmu_radio_settings[3] = 0x07021004;
+    pmu_radio_settings[4] = 0x07021004;
+
 
     // Initialization
     xo_init();
 
     // BREAKPOINT 0x02
     mbus_write_message32(0xBA, 0x02);
+
+#ifdef USE_PMU
+    pmu_init();
+#endif
 
 #ifdef USE_SNT
     sntv4_r01.TSNS_BURST_MODE = 0;
@@ -1572,26 +1593,20 @@ static void operation_init( void ) {
     sntv4_r07.TSNS_INT_RPLY_REG_ADDR   = 0x00;
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
     operation_temp_run();
+#ifdef USE_PMU
+    pmu_setting_temp_based();
+#endif
 #endif
 
-    mbus_write_message32(0xE2, 0xDDAADD);
 #ifdef USE_LNT
     lnt_init();
 #endif
-    mbus_write_message32(0xE3, 0xDDAADD);
-
-#ifdef USE_PMU
-    pmu_init();
-#endif
 
 #ifdef USE_MRR
-    mbus_write_message32(0xEE, 0xDDAADD);
     mrr_init();
     radio_on = 0;
     radio_ready = 0;
-    mbus_write_message32(0xEE, 0xDDAADD);
 #endif
-    mbus_write_message32(0xE4, 0xDDAADD);
 }
 
 /**********************************************
@@ -1679,6 +1694,7 @@ void handler_ext_int_wakeup( void ) { // WAKEUP
 void handler_ext_int_gocep( void ) { // GOCEP
     *NVIC_ICPR = (0x1 << IRQ_GOCEP);
     set_goc_cmd();
+    pmu_use_radio_setting = 0;
 }
 
 void handler_ext_int_timer32( void ) { // TIMER32
@@ -1729,9 +1745,30 @@ int main() {
         operation_sleep_notimer();
     }
 
+    if(lnt_start_meas) {
+	lnt_stop();
+	lnt_start_meas = 0;
+	mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
+	lnt_sys_light = ((*REG1 & 0xFFFFFF) << 24) | (*REG0);
+	mbus_write_message32(0xD2, (lnt_sys_light >> 24) & 0xFFFFFF);
+	mbus_write_message32(0xD2, lnt_sys_light & 0xFFFFFF);
+    }
+
     set_xo_timer(0, 0, 0, 0);
 
+#ifdef USE_SNT
+    if(snt_update_temp == 0b11) {
+	operation_temp_run();
+#ifdef USE_PMU
+	pmu_setting_temp_based();
+#endif
+    }
+    snt_update_temp |= 0b01;
+#endif
+
+    xo_next_timer_val = 0;
     sys_run_continuous = 0;
+
     do {
         if(goc_component == 0xFF) {}
         else if(goc_component == 0x00) {
@@ -1764,12 +1801,12 @@ int main() {
             }
             else if(goc_func_id == 0x04) {
                 if(!goc_state) {
-                    goc_state++;
+                    goc_state = 1;
                     op_counter = 0;
                 }
 
                 if(++op_counter <= goc_data) {
-                    set_xot_in_sec(0, xo_period, 1, 0);
+		    xo_next_timer_val = xo_period;
                 }
             }
             else if(goc_func_id == 0x05) {
@@ -1801,19 +1838,23 @@ int main() {
         else if(goc_component == 0x01) {
             if(goc_func_id == 0x00) {}
             else if(goc_func_id == 0x01) {
-                operation_temp_run();
+		operation_temp_run();
             }
             else if(goc_func_id == 0x02) {
                 if(!goc_state) {
-                    goc_state++;
+                    goc_state = 1;
                     op_counter = 0;
                 }
 
                 if(++op_counter <= goc_data) {
-                    operation_temp_run();
-                    set_xot_in_sec(0, xo_period, 1, 0);
+		    mbus_write_message32(0xD1, snt_sys_temp);
+		    xo_next_timer_val = xo_period;
                 }
             }
+	    else if(goc_func_id == 0x03) {
+		if(snt_update_temp & 0b10) { snt_update_temp &= 0b01; }
+		else { snt_update_temp |= 0b10; }
+	    }
         }
         else if(goc_component == 0x02) {
             if(goc_func_id == 0x00) {
@@ -1823,12 +1864,27 @@ int main() {
                 }
             }
             else if(goc_func_id == 0x01) {
+		if(!goc_state) {
+		    goc_state = 1;
+		    op_counter = 0;
+		}
+
+		if(goc_state == 1) {
+		    goc_state = 2;
+		    lnt_start_meas = 1;
+		}
+		else if(goc_state == 2) {
+		    goc_state = 1;
+		    if(++op_counter <= goc_data) {
+			xo_next_timer_val = xo_period;
+		    }
+		}
                 // operation_lnt_run();
-		lnt_stop();
-		mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
-		lnt_sys_light = ((*REG1 & 0xFFFFFF) << 24) | (*REG0);
-		mbus_write_message32(0xD2, (lnt_sys_light >> 24) & 0xFFFFFF);
-		mbus_write_message32(0xD2, lnt_sys_light & 0xFFFFFF);
+		// lnt_stop();
+		// mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
+		// lnt_sys_light = ((*REG1 & 0xFFFFFF) << 24) | (*REG0);
+		// mbus_write_message32(0xD2, (lnt_sys_light >> 24) & 0xFFFFFF);
+		// mbus_write_message32(0xD2, lnt_sys_light & 0xFFFFFF);
             }
             else if(goc_func_id == 0x02) {
                 lnt_thresh_data = goc_data;
@@ -1845,30 +1901,32 @@ int main() {
                 }
             }
             else if(goc_func_id == 0x04) {
-                if(!goc_state) {
-                   goc_state++;
-                   op_counter = 0;
-                }
+                // if(!goc_state) {
+                //    goc_state = 1;
+                //    op_counter = 0;
+                // }
 
-                if(++op_counter <= goc_data) {
-		    mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
-		    lnt_sys_light = ((*REG1 & 0x7FFFFF) << 24) | (*REG0);
-                    set_xot_in_sec(0, xo_period, 1, 0);
-		    mbus_write_message32(0xD2, (lnt_sys_light >> 24) & 0xFFFFFF);
-		    mbus_write_message32(0xD2, lnt_sys_light & 0xFFFFFF);
-                }
+                // if(++op_counter <= goc_data) {
+		//     lnt_start_meas = 1;
+                // }
             }
             else if(goc_func_id == 0x05) {
                 if(!goc_state) {
-                    goc_state++;
+                    goc_state = 1;
                     op_counter = 0;
                 }
 
-                if(++op_counter <= goc_data) {
-                    operation_lnt_run();
-                    update_xo_period_under_light();
-                    set_xot_in_sec(0, xo_period, 1, 0);
-                }
+		if(goc_state == 1) {
+		    goc_state = 2;
+		    lnt_start_meas = 1;
+		}
+		else if(goc_state == 2) {
+		    goc_state = 1;
+		    if(++op_counter <= goc_data) {
+			update_xo_period_under_light();
+			xo_next_timer_val = xo_period;
+		    }
+		}
             }
         }
         else if(goc_component == 0x03) {
@@ -1908,21 +1966,22 @@ int main() {
                     xo_end_time = xo_sys_time + goc_data;
                 }
 
+		// FIXME: FIX THIS
                 if(goc_state == 1) {
                     if(xo_sys_time >= xo_end_time) {
                         goc_state = 2;
                     }
                     else if(xo_day_time >= xo_day_start && xo_day_time < xo_day_end) {
-                        operation_temp_run();
-                        operation_lnt_run();
+                        // operation_temp_run();
+                        // operation_lnt_run();
                         // storage code
                         update_xo_period_under_light();
-                        set_xot_in_sec(0, xo_period, 1, 0);
+                        // set_xot_in_sec(0, xo_period, 1, 0);
                     }
                 }
 
                 if(goc_state == 2) {
-                    operation_temp_run();
+                    // operation_temp_run();
                     if(xo_sys_time >= xo_end_time) {
                         // if snt_sys_temp >= mrr_temp_thresh 
                         // && sys_volt_lvl >= mrr_volt_thresh
@@ -1933,7 +1992,7 @@ int main() {
                     else {
                         // send hello signal
                     }
-                    set_xot_in_sec(0, mrr_signal_period, 1, 0);
+                    // set_xot_in_sec(0, mrr_signal_period, 1, 0);
                 }
             }
             else if(goc_func_id == 0x02) {}
@@ -1948,35 +2007,41 @@ int main() {
             }
             else if(goc_func_id == 0x06) {
                 if(!goc_state) {
-                    goc_state++;
+                    goc_state = 1;
                     op_counter = 0;
+		    pmu_use_radio_setting = 1;
                 }
-
-                if(++op_counter <= goc_data) {
-                    set_xot_in_sec(0, mrr_signal_period, 1, 0);
-                    // send out signal
+		else if(++op_counter <= goc_data) {
+		    xo_next_timer_val = mrr_signal_period;
 		    reset_radio_data_arr();
 		    radio_data_arr[0] = 0xDEADBEEF;
 		    mrr_send_radio_data(1);
                 }
+		else {
+		    pmu_use_radio_setting = 0;
+		    pmu_setting_temp_based();
+		}
             }
             else if(goc_func_id == 0x07) {
                 // radio out the first goc_data - 1 words in the mem layer
             }
             else if(goc_func_id == 0x08) {
                 if(!goc_state) {
-                    goc_state++;
+                    goc_state = 1;
                     op_counter = 0;
+		    pmu_use_radio_setting = 1;
                 }
-
-                if(++op_counter <= goc_data) {
-		    operation_temp_run();
+		else if(++op_counter <= goc_data) {
+		    xo_next_timer_val = mrr_signal_period;
 		    reset_radio_data_arr();
 		    radio_data_arr[0] = snt_sys_temp;
                     // send out signal
 		    mrr_send_radio_data(1);
-                    set_xot_in_sec(0, mrr_signal_period, 1, 0);
                 }
+		else {
+		    pmu_use_radio_setting = 0;
+		    pmu_setting_temp_based();
+		}
             }
         }
         else if(goc_component == 0x05) {
@@ -2011,7 +2076,7 @@ int main() {
             }
             else if(goc_func_id == 0x03) {
                 pmu_sar_conversion_ratio = goc_data & 0xFF;
-                pmu_set_sar_conversion_ratio();
+                pmu_set_sar_conversion_ratio(pmu_sar_conversion_ratio);
             }
             else if(goc_func_id == 0x04) {
                 pmu_setting_val &= 0x0000FFFF;
@@ -2055,13 +2120,31 @@ int main() {
                 }
             }
             else if(goc_func_id == 0x0A) {
-                operation_temp_run();
-                pmu_setting_temp_based();
+                // operation_temp_run();
+                // pmu_setting_temp_based();
             }
         }
     } while(sys_run_continuous);
 
-    if(lnt_start_meas) { lnt_start(); }
+    if(lnt_start_meas) { 
+	lnt_start(); 
+	xo_next_timer_val = LNT_MEAS_TIME;
+	snt_update_temp &= 0b10;
+    }
+    else if(pmu_use_radio_setting == 1) {
+	pmu_use_radio_setting = 2;
+    	pmu_setting_temp_based();
+	xo_next_timer_val = PMU_SETTING_TIME;
+	snt_update_temp &= 0b10;
+    }
+    else if(snt_update_temp == 0b11 && xo_next_timer_val == 0) {
+    	xo_next_timer_val = SNT_TEMP_UPDATE_TIME;
+    }
+
+    if(xo_next_timer_val) {
+	set_xot_in_sec(0, xo_next_timer_val, 1, 0);
+    }
+
     mbus_write_message32(0xED, 0xEEEEEEEE);
     operation_sleep_with_xo_cnt();
     

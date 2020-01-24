@@ -27,10 +27,10 @@
 #define MEM_ADDR 0x6
 #define ENUMID 0xDEADBEEF
 
-#define USE_MRR
-#define USE_LNT
+// #define USE_MRR
+// #define USE_LNT
 #define USE_SNT
-#define USE_PMU
+// #define USE_PMU
 #define USE_MEM
 
 #define MBUS_DELAY 100  // Amount of delay between seccessive messages; 100: 6-7ms
@@ -43,9 +43,11 @@
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
 
-#define LNT_MEAS_TIME 10
+#define LNT_MEAS_TIME 30
 #define PMU_SETTING_TIME 10
 #define SNT_TEMP_UPDATE_TIME 300
+
+#define MEM_STORAGE_SIZE 8192
 
 #define RADIO_PACKET_DELAY 13000  // Amount of delay between radio packets
 #define RADIO_DATA_LENGTH 192
@@ -599,16 +601,24 @@ static void lnt_start() {
 }
 
 static void lnt_stop() {
-    // Release Reset 
-    lntv1a_r00.RESET_AFE = 0x0; // Defhttps://www.dropbox.com/s/yh15ux4h8141vu4/ISSCC2019-Digest.pdf?dl=0ault : 0x1
-    lntv1a_r00.RESETN_DBE = 0x1; // Default : 0x0
+    // Change Counting Time 
+    lntv1a_r03.TIME_COUNTING = 0x000; // Default : 0x258
+    mbus_remote_register_write(LNT_ADDR,0x03,lntv1a_r03.as_int);
+    delay(MBUS_DELAY*10);
+    
+    set_halt_until_mbus_trx();
+    mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
+    set_halt_until_mbus_tx();
+    lnt_sys_light = ((*REG1 & 0xFFFFFF) << 24) | (*REG0);
+
+    // Stop FSM: Counter Idle -> Counter Counting 
+    lntv1a_r00.DBE_ENABLE = 0x0; // Default : 0x0
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
     delay(MBUS_DELAY*10);
     
-    // LNT Start
-    lntv1a_r00.DBE_ENABLE = 0x1; // Default : 0x0
-    lntv1a_r00.WAKEUP_WHEN_DONE = 0x0; // Default : 0x0
-    lntv1a_r00.MODE_CONTINUOUS = 0x0; // Default : 0x0
+    // Reset LNT
+    lntv1a_r00.RESET_AFE = 0x1; // Default : 0x1
+    lntv1a_r00.RESETN_DBE = 0x0; // Default : 0x0
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
     delay(MBUS_DELAY*10);
 }
@@ -1748,8 +1758,6 @@ int main() {
     if(lnt_start_meas) {
 	lnt_stop();
 	lnt_start_meas = 0;
-	mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
-	lnt_sys_light = ((*REG1 & 0xFFFFFF) << 24) | (*REG0);
 	mbus_write_message32(0xD2, (lnt_sys_light >> 24) & 0xFFFFFF);
 	mbus_write_message32(0xD2, lnt_sys_light & 0xFFFFFF);
     }
@@ -1946,10 +1954,13 @@ int main() {
                 mem_write_data |= goc_data;
             }
             else if(goc_func_id == 0x04) {
-                // TODO: implement mem write
+		mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) mem_addr, &mem_write_data, 0);
             }
             else if(goc_func_id == 0x05) {
-                // TODO: implement mem read
+		uint32_t mem_read_data;
+		set_halt_until_mbus_trx();
+		mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) mem_addr, PRE_ADDR, &mem_read_data, goc_data & 0xFF);
+		set_halt_until_mbus_tx();
             }
         }
         else if(goc_component == 0x04) {

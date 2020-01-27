@@ -287,6 +287,7 @@ static void set_xot_in_sec(uint8_t mode,
                            uint8_t en_irq) {
     uint32_t timer_val = time_in_sec << 15;
     set_xo_timer(mode, timer_val, wren_irq, en_irq);
+    // FIXME: maybe use XOT_VAL
     uint32_t timer_cnt = (*REG_XOT_VAL_U << 16) | (*REG_XOT_VAL_L);
     if(timer_cnt > timer_val) {
         sys_err(0x00000000);

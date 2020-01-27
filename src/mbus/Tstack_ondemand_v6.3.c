@@ -604,7 +604,7 @@ inline static void pmu_adc_enable(){
         | (1 << 13) //state_sar_scn_ratio_adjusted // Turn on for old adc, off for new adc
         | (1 << 14) //state_downconverter_on
         | (1 << 15) //state_downconverter_stabilized
-        | (1state_downconverter_stabilized << 16) //state_vdd_3p6_turned_on
+        | (1 << 16) //state_vdd_3p6_turned_on
         | (1 << 17) //state_vdd_1p2_turned_on
         | (1 << 18) //state_vdd_0P6_turned_on
         | (0 << 19) //state_vbat_read // Turn off for old adc

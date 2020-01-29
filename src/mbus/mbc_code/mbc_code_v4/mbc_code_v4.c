@@ -1092,23 +1092,18 @@ static void radio_power_off() {
 
 }
 
+static void mrr_configure_pulse_width_long() {
 
-static void mrr_configure_pulse_width_long(){
-
-    //   mrrv7_r12.MRR_RAD_FSM_TX_PW_LEN = 12; //50us PW
-    //   mrrv7_r13.MRR_RAD_FSM_TX_C_LEN = 1105;
-    //   mrrv7_r12.MRR_RAD_FSM_TX_PS_LEN = 25; // PW=PS   
-
-    mrrv7_r12.MRR_RAD_FSM_TX_PW_LEN = 24; //50us PW
-    mrrv7_r13.MRR_RAD_FSM_TX_C_LEN = 200;
-    mrrv7_r12.MRR_RAD_FSM_TX_PS_LEN = 49; // PW=PS   
+    mrrv7_r12.MRR_RAD_FSM_TX_PW_LEN = 12; //50us PW
+    mrrv7_r13.MRR_RAD_FSM_TX_C_LEN = 1105;
+    mrrv7_r12.MRR_RAD_FSM_TX_PS_LEN = 25; // PW=PS   
 
     mbus_remote_register_write(MRR_ADDR,0x12,mrrv7_r12.as_int);
     mbus_remote_register_write(MRR_ADDR,0x13,mrrv7_r13.as_int);
 
 }
 
-static void send_radio_data_mrr_sub1(){
+static void send_radio_data_mrr_sub1() {
 
     // Use timer32 as timeout counter
     set_timer32_timeout(TIMER32_VAL);

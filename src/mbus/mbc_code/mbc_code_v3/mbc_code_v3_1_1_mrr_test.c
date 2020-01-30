@@ -420,10 +420,7 @@ static void operation_temp_run() {
         temp_data_valid = 0;
 
         // Turn on snt ldo vref; requires ~30 ms to settle
-        // TODo: figure out delay time
         snt_ldo_vref_on();
-        delay(MBUS_DELAY);
-
         snt_state = SNT_TEMP_LDO;
 
     }

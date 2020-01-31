@@ -45,7 +45,7 @@
 
 #define LNT_MEAS_TIME 30
 #define PMU_SETTING_TIME 10
-#define SNT_TEMP_UPDATE_TIME 300
+#define SNT_TEMP_UPDATE_TIME 600
 
 #define MEM_STORAGE_SIZE 8192
 
@@ -419,6 +419,7 @@ static void set_snt_timer(uint32_t end_time) {
     sntv4_r17.WUP_LC_IRQ_EN = 1;
     sntv4_r17.WUP_AUTO_RESET = 0;
     mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
+    mbus_write_message32(0xCE, end_time - xo_sys_time_in_sec);
 }
 
 static void operation_temp_run() {
@@ -1696,7 +1697,7 @@ int main() {
                     mem_temp_addr = 7000;
                     mem_temp_len = 0;
 
-                    uint32_t next_hour_in_sec = goc_data;
+                    uint32_t next_hour_in_sec = goc_data * 3600;
                     xot_timer_list[RUN_SNT] = xo_sys_time_in_sec + next_hour_in_sec - xo_day_time_in_sec;
                     xot_timer_list[START_LNT] = xot_timer_list[RUN_SNT];
 
@@ -1725,7 +1726,7 @@ int main() {
                                 mem_temp_len++;
                             }
 
-                            set_next_time(RUN_SNT, 600);
+                            set_next_time(RUN_SNT, SNT_TEMP_UPDATE_TIME);
                         }
 
                         // LNT measurements

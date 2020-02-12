@@ -677,6 +677,87 @@ static void set_next_time(uint8_t idx, uint16_t step) {
 }
 
 /**********************************************
+ * Compression Functions
+ **********************************************/
+
+#define LONG_INT_LEN 4
+#define LOG2_RES 5
+
+const uint16_t LOG_CONST_ARR[5] = {0b1011010100000100,
+                                   0b1001100000110111,
+                                   0b1000101110010101,
+                                   0b1000010110101010,
+                                   0b1000001011001101};
+
+typedef uint32_t* long_int;
+
+static void long_int_assign(long_int dest, const long_int src) {
+    uint8_t i;
+    for(i = 0; i < LONG_INT_LEN; i++) {
+        dest[i] = src[i];
+    }
+}
+
+static void long_int_mult(const long_int lhs, const uint16_t rhs, long_int res) {
+    uint32_t carry_in = 0;
+    uint32_t temp_res[LONG_INT_LEN] = {0, 0, 0, 0};
+    uint8_t i;
+    for(i = 0; i < LONG_INT_LEN; i++) {
+        uint64_t temp = ((uint64_t) lns[i] * rhs) + carry_in;
+        carry_in = temp >> 32;
+        temp_res[i] = temp & 0xFFFFFFFF;
+    }
+    long_int_assign(res, temp_res);
+}
+
+static bool long_int_lte(const long_int lhs, const long_int rhs) {
+    int8_t i;
+    for(i = 3; i >= 0; i--) {
+        if(lhs[i] < rhs[i]) {
+            return true;
+        }
+        else if(lhs[i] > rhs[i]) {
+            return false;
+        }
+    }
+    return false;
+}
+
+uint16_t log2(uint64_t input) {
+    if(input == 0) { return 0; }
+
+    uint32_t temp_result[2] = {0, 0, 0, 0}, input_storage[4] = {0, 0, 0, 0};
+    input_storage[0] = input & 0xFFFFFFFF;
+    input_storage[1] = input >> 32;
+    uint16_t out = 0;
+
+    int16_t i;
+    for(i = 63; i >= 0; i--) {
+        if(input & ((uint64_t) 1 << i)) {
+            temp_result[0] = (1 << i) & 0xFFFFFFFF;
+            temp_result[1] = i >= 32? (1 << (1 - 32)) : 0;
+            out = 1 * (1 << LOG2_RES);
+            break;
+        }
+    }
+    for(i = 0; i < LOG2_RES; i++) {
+        uint32_t new_result[4];
+        log_int_mult(temp_result, LOG_CONST_ARR[i], new_result);
+        long_int_mult(input_storage, (1 << 15), input_storage);
+
+        if(long_int_lte(new_result, input_storage)) {
+            long_int_assign(temp_result, new_result);
+            out |= (1 << (LOG2_RES - 1 - i));
+        }
+        else {
+            long_int_mult(temp_result, (1 << 15), temp_result);
+        }
+    }
+
+    return out & 0x7FF;
+}
+
+/**********************************************
  * MEM Functions
  **********************************************/
 

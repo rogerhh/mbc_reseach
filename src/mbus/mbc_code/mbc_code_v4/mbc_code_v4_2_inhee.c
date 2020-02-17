@@ -607,10 +607,12 @@ static void lnt_start() {
     lntv1a_r00.WAKEUP_WHEN_DONE = 0x0; // Default : 0x0
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
     delay(MBUS_DELAY*10); 
+
     lntv1a_r00.DBE_ENABLE = 0x0; // Default : 0x0
     lntv1a_r00.WAKEUP_WHEN_DONE = 0x1; // Default : 0x0
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
     delay(MBUS_DELAY*10);
+
     lntv1a_r00.DBE_ENABLE = 0x1; // Default : 0x0
     lntv1a_r00.WAKEUP_WHEN_DONE = 0x1; // Default : 0x0
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);

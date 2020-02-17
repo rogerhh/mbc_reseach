@@ -145,7 +145,7 @@ volatile uint64_t lnt_last_light;
 #define MRR_TEMP_THRESH     5 		// FIXME: use code for this
 #define MRR_VOLT_THRESH     0x4B 	// FIXME: use code for this
 
-const int32_t PMU_TEMP_THRESH[6] = {-10, 0, 10, 20, 30, 45, 60};
+const int32_t PMU_TEMP_THRESH[7] = {-10, 0, 10, 20, 30, 45, 60};
 const uint32_t PMU_ACTIVE_SETTINGS[7] = {0x0D021004, 
 					 0x0D021004, 
 					 0x0D021004, 

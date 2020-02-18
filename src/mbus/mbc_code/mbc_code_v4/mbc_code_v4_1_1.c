@@ -32,7 +32,7 @@
 #define USE_SNT
 #define USE_PMU
 #define USE_MEM
-// #define USE_RAD
+#define USE_RAD
 
 #define MBUS_DELAY 100  // Amount of delay between seccessive messages; 100: 6-7ms
 #define TIMER32_VAL 0xA0000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
@@ -45,7 +45,7 @@
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
 
-#define LNT_MEAS_TIME 300	// FIXME: change this to 30
+#define LNT_MEAS_TIME 32	// FIXME: change this to 32
 #define PMU_SETTING_TIME 10
 #define SNT_TEMP_UPDATE_TIME 600
 
@@ -132,6 +132,7 @@ volatile uint8_t snt_state;
 volatile uint8_t snt_counter;
 
 volatile uint8_t lnt_start_meas = 0;
+volatile uint8_t lnt_counter_base = 0;	// lnt measure time is LNT_MEAS_TIME << lnt_counter_base
 volatile uint8_t lnt_cur_level;
 const uint16_t LNT_UPPER_THRESH[3] = {500, 1500, 5000};
 const uint16_t LNT_LOWER_THRESH[3] = {300, 1200, 4000};
@@ -145,7 +146,7 @@ volatile uint64_t lnt_last_light;
 #define MRR_VOLT_THRESH     0x4B 	// FIXME: use code for this
 
 const int32_t PMU_TEMP_THRESH[7] = {-10, 0, 10, 20, 30, 40, 50, 60};
-const uint32_t PMU_ACTIVE_SETTINGS[7] = {0x0D021004, 
+const uint32_t PMU_ACTIVE_SETTINGS[8] = {0x0D021004, 
 					 0x0D021004, 
 					 0x0D021004, 
 					 0x05011002, 
@@ -153,7 +154,7 @@ const uint32_t PMU_ACTIVE_SETTINGS[7] = {0x0D021004,
 					 0x02011002, 
 					 0x02011002, 
 					 0x02011002};
-const uint32_t PMU_RADIO_SETTINGS[7] = {0x07021004,
+const uint32_t PMU_RADIO_SETTINGS[8] = {0x07021004,
 					0x07021004,
 					0x07021004,
 					0x07021004,
@@ -161,7 +162,7 @@ const uint32_t PMU_RADIO_SETTINGS[7] = {0x07021004,
 					0x07021004,
 					0x07021004,
 					0x07021004};
-const uint32_t PMU_SLEEP_SETTINGS[7] = {0x0F010102,
+const uint32_t PMU_SLEEP_SETTINGS[8] = {0x0F010102,
 					0x0F010102,
 					0x0F010102,
 					0x0F010102,
@@ -386,7 +387,7 @@ static uint16_t process_temp(uint32_t temp_code){
     return temp_code;
 }
 
-static inline void snt_clk_init() {
+static inline void snt_clk_init() {	// NOTE: now using LNT TIMER
     // start SNT clock
     sntv4_r08.TMR_SLEEP = 0;
     sntv4_r08.TMR_ISOLATE = 0;
@@ -412,24 +413,25 @@ static inline void snt_clk_init() {
     // mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
 }
 
-static void set_snt_timer(uint32_t end_time) {
-    mbus_write_message32(0xEE, 0xFFFFAAAA);
-    update_system_time();
-    if(end_time <= xo_sys_time_in_sec) {
-        sys_err(0x0);
-    }
-    uint32_t val = (end_time - xo_sys_time_in_sec) * 1564;
+// static void set_snt_timer(uint32_t end_time) {
+//     mbus_write_message32(0xEE, 0xFFFFAAAA);
+//     update_system_time();
+//     if(end_time <= xo_sys_time_in_sec) {
+//         sys_err(0x0);
+//     }
+//     uint32_t val = (end_time - xo_sys_time_in_sec) * 1564;
+// 
+//     // TODO: set snt timer
+//     mbus_remote_register_write(SNT_ADDR, 0x19, (val >> 24));
+//     mbus_remote_register_write(SNT_ADDR, 0x1A, val & 0xFFFFFF);
+// 
+//     sntv4_r17.WUP_ENABLE = 1;
+//     sntv4_r17.WUP_LC_IRQ_EN = 1;
+//     sntv4_r17.WUP_AUTO_RESET = 0;
+//     mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
+//     mbus_write_message32(0xCE, end_time - xo_sys_time_in_sec);
+// }
 
-    // TODO: set snt timer
-    mbus_remote_register_write(SNT_ADDR, 0x19, (val >> 24));
-    mbus_remote_register_write(SNT_ADDR, 0x1A, val & 0xFFFFFF);
-
-    sntv4_r17.WUP_ENABLE = 1;
-    sntv4_r17.WUP_LC_IRQ_EN = 1;
-    sntv4_r17.WUP_AUTO_RESET = 0;
-    mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
-    mbus_write_message32(0xCE, end_time - xo_sys_time_in_sec);
-}
 
 static void operation_temp_run() {
     if(snt_state == SNT_IDLE) {
@@ -609,31 +611,64 @@ static void lnt_start() {
     lntv1a_r00.MODE_CONTINUOUS = 0x0; // Default : 0x0
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
     delay(MBUS_DELAY*10);
+
+    lntv1a_r00.WAKEUP_WHEN_DONE = 0x1; // Default : 0x0
+    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    delay(MBUS_DELAY*100);
 }
 
 static void lnt_stop() {
-    // Change Counting Time 
-    lntv1a_r03.TIME_COUNTING = 0x000; // Default : 0x258
-    mbus_remote_register_write(LNT_ADDR,0x03,lntv1a_r03.as_int);
-    delay(MBUS_DELAY*10);
+    // // Change Counting Time 
+    // lntv1a_r03.TIME_COUNTING = 0x000; // Default : 0x258
+    // mbus_remote_register_write(LNT_ADDR,0x03,lntv1a_r03.as_int);
+    // delay(MBUS_DELAY*10);
     
     set_halt_until_mbus_trx();
     mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
     set_halt_until_mbus_tx();
-    lnt_sys_light = ((*REG1 & 0xFFFFFF) << 24) | (*REG0);
+    lnt_sys_light = (((*REG1 & 0xFFFFFF) << 24) | (*REG0)) >> lnt_counter_base;
+    mbus_write_message32(0xE0, lnt_sys_light >> 32);
+    mbus_write_message32(0xE1, lnt_sys_light & 0xFFFFFFFF);
 
-    // Stop FSM: Counter Idle -> Counter Counting 
+    // // Stop FSM: Counter Idle -> Counter Counting 
     lntv1a_r00.DBE_ENABLE = 0x0; // Default : 0x0
+    lntv1a_r00.WAKEUP_WHEN_DONE = 0x0;
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
-    delay(MBUS_DELAY*10);
+    delay(MBUS_DELAY*100);
     
     // Reset LNT
-    lntv1a_r00.RESET_AFE = 0x1; // Default : 0x1
-    lntv1a_r00.RESETN_DBE = 0x0; // Default : 0x0
-    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
-    delay(MBUS_DELAY*10);
+    //lntv1a_r00.RESET_AFE = 0x1; // Default : 0x1
+    //lntv1a_r00.RESETN_DBE = 0x0; // Default : 0x0
+    //mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    //delay(MBUS_DELAY*100);
 }
 
+static void set_lnt_timer(uint32_t end_time) {
+    mbus_write_message32(0xEE, 0xFFFFAAAA);
+    update_system_time();
+    if(end_time <= xo_sys_time_in_sec) {
+        sys_err(0x0);	// FIXME: remove this error message. Would rather have timing off than crash
+    }
+
+    // TODO: set lnt timer
+    if(!lnt_start_meas) {
+	uint32_t val = (end_time - xo_sys_time_in_sec) * 1564;
+	mbus_remote_register_write(LNT_ADDR, 0x41, (val >> 24));
+	mbus_remote_register_write(LNT_ADDR, 0x42, val & 0xFFFFFF);
+
+	lntv1a_r40.WUP_ENABLE = 1;
+	lntv1a_r40.WUP_LC_IRQ_EN = 1;
+	lntv1a_r40.WUP_AUTO_RESET = 1;
+	mbus_remote_register_write(LNT_ADDR, 0x40, lntv1a_r40.as_int);
+    }
+    else {
+	uint32_t val = (end_time - xo_sys_time_in_sec) * 8;
+    	lntv1a_r03.TIME_COUNTING = val;
+	mbus_remote_register_write(LNT_ADDR, 0x03, lntv1a_r03.as_int);
+	lnt_start();
+    }
+    mbus_write_message32(0xCE, end_time - xo_sys_time_in_sec);
+}
 
 static uint16_t update_light_interval() {
     int i;
@@ -674,87 +709,6 @@ static void set_next_time(uint8_t idx, uint16_t step) {
     while(xo_sys_time_in_sec + 5 > xot_timer_list[idx]) {    // give some margin of error
         xot_timer_list[idx] += step;
     }
-}
-
-/**********************************************
- * Compression Functions
- **********************************************/
-
-#define LONG_INT_LEN 4
-#define LOG2_RES 5
-
-const uint16_t LOG_CONST_ARR[5] = {0b1011010100000100,
-                                   0b1001100000110111,
-                                   0b1000101110010101,
-                                   0b1000010110101010,
-                                   0b1000001011001101};
-
-typedef uint32_t* long_int;
-
-static void long_int_assign(long_int dest, const long_int src) {
-    uint8_t i;
-    for(i = 0; i < LONG_INT_LEN; i++) {
-        dest[i] = src[i];
-    }
-}
-
-static void long_int_mult(const long_int lhs, const uint16_t rhs, long_int res) {
-    uint32_t carry_in = 0;
-    uint32_t temp_res[LONG_INT_LEN] = {0, 0, 0, 0};
-    uint8_t i;
-    for(i = 0; i < LONG_INT_LEN; i++) {
-        uint64_t temp = ((uint64_t) lns[i] * rhs) + carry_in;
-        carry_in = temp >> 32;
-        temp_res[i] = temp & 0xFFFFFFFF;
-    }
-    long_int_assign(res, temp_res);
-}
-
-static bool long_int_lte(const long_int lhs, const long_int rhs) {
-    int8_t i;
-    for(i = 3; i >= 0; i--) {
-        if(lhs[i] < rhs[i]) {
-            return true;
-        }
-        else if(lhs[i] > rhs[i]) {
-            return false;
-        }
-    }
-    return false;
-}
-
-uint16_t log2(uint64_t input) {
-    if(input == 0) { return 0; }
-
-    uint32_t temp_result[2] = {0, 0, 0, 0}, input_storage[4] = {0, 0, 0, 0};
-    input_storage[0] = input & 0xFFFFFFFF;
-    input_storage[1] = input >> 32;
-    uint16_t out = 0;
-
-    int16_t i;
-    for(i = 63; i >= 0; i--) {
-        if(input & ((uint64_t) 1 << i)) {
-            temp_result[0] = (1 << i) & 0xFFFFFFFF;
-            temp_result[1] = i >= 32? (1 << (1 - 32)) : 0;
-            out = 1 * (1 << LOG2_RES);
-            break;
-        }
-    }
-    for(i = 0; i < LOG2_RES; i++) {
-        uint32_t new_result[4];
-        log_int_mult(temp_result, LOG_CONST_ARR[i], new_result);
-        long_int_mult(input_storage, (1 << 15), input_storage);
-
-        if(long_int_lte(new_result, input_storage)) {
-            long_int_assign(temp_result, new_result);
-            out |= (1 << (LOG2_RES - 1 - i));
-        }
-        else {
-            long_int_mult(temp_result, (1 << 15), temp_result);
-        }
-    }
-
-    return out & 0x7FF;
 }
 
 /**********************************************
@@ -1614,7 +1568,7 @@ static void operation_init( void ) {
     sntv4_r07.TSNS_INT_RPLY_REG_ADDR   = 0x00;
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
 
-    snt_clk_init();
+    // snt_clk_init();
     operation_temp_run();
 #ifdef USE_PMU
     // pmu_setting_temp_based(0);
@@ -1953,39 +1907,43 @@ int main() {
         }
     } while(sys_run_continuous);
 
-    // if measuring light, set everything to be after
-    uint32_t min_time = 0xFFFFFFFF; 
+    // Find min time in system
+    uint32_t min_time = 0xFFFFFFFF;
     update_system_time();
-    if(lnt_start_meas == 1) {
-        min_time = xo_sys_time_in_sec + LNT_MEAS_TIME;
-    }
-    else {
-        uint8_t i;
-        for(i = 0; i < XOT_TIMER_LIST_LEN; i++) {
-            if(xot_timer_list[i] != 0 && xot_timer_list[i] <= min_time) {
-                min_time = xot_timer_list[i];
-            }
-        }
+    uint8_t i;
+    for(i = 0; i < XOT_TIMER_LIST_LEN; i++) {
+    	if(xot_timer_list[i] != 0 && xot_timer_list[i] <= min_time) {
+	    min_time = xot_timer_list[i];
+	}
     }
 
-    // set wake up settings
+    if(lnt_start_meas == 1) {
+	uint16_t sleep_time;
+	if(min_time == 0xFFFFFFFF) {
+	    sleep_time = 60;	// set arbitrary value so lnt counting time will default to 32
+	}
+	else {
+	    sleep_time = min_time - xo_sys_time_in_sec;
+	}
+	
+	lnt_counter_base = 0;
+	while(((LNT_MEAS_TIME << (lnt_counter_base + 1)) + 10 < sleep_time) && lnt_counter_base < 4) {
+	    lnt_counter_base++;
+	}
+	update_system_time();
+	min_time = xo_sys_time_in_sec + LNT_MEAS_TIME << lnt_counter_base;
+    }
+
     if(min_time != 0xFFFFFFFF) {
-	uint8_t i;
-        for(i = 0; i < XOT_TIMER_LIST_LEN; i++) {
-            if(xot_timer_list[i] != 0 && xot_timer_list[i] <= min_time) {
+	// set timer trigger so operations will trigger
+	for(i = 0; i < XOT_TIMER_LIST_LEN; i++) {
+	    if(xot_timer_list[i] != 0 && xot_timer_list[i] <= min_time) {
                 xot_last_timer_list[i] = xot_timer_list[i];
                 xot_timer_list[i] = 0xFFFFFFFF;
-            }
-        }
-
-        set_snt_timer(min_time);
+	    }
+	}
+	set_lnt_timer(min_time);
     }
-
-    if(lnt_start_meas == 1) {
-    	lnt_start();
-    }
-
-    pmu_setting_temp_based(2);
 
     operation_sleep();
 

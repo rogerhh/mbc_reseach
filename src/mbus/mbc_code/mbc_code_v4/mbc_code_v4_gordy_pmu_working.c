@@ -9,7 +9,6 @@
  * v3.1: compact code
  *
  * v4: deployment code with periodic wakeup
- *  testing self adjusting timer multiplier
  ******************************************************************************************/
 
 #include "../include/PREv20.h"
@@ -43,7 +42,7 @@
 #define USE_SNT
 #define USE_PMU
 #define USE_MEM
-// #define USE_RAD
+#define USE_RAD
 
 #define MBUS_DELAY 100  // Amount of delay between seccessive messages; 100: 6-7ms
 #define TIMER32_VAL 0xA0000  // 0x20000 about 1 sec with Y5 run default clock (PRCv17)
@@ -56,7 +55,7 @@
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
 
-#define LNT_MEAS_TIME 50	// 30 seconds snt timer
+#define LNT_MEAS_TIME 32	// FIXME: change this to 32
 #define PMU_SETTING_TIME 10
 #define SNT_TEMP_UPDATE_TIME 600
 
@@ -77,9 +76,8 @@ volatile sntv4_r00_t sntv4_r00 = SNTv4_R00_DEFAULT;
 volatile sntv4_r01_t sntv4_r01 = SNTv4_R01_DEFAULT;
 volatile sntv4_r07_t sntv4_r07 = SNTv4_R07_DEFAULT;
 volatile sntv4_r08_t sntv4_r08 = SNTv4_R08_DEFAULT;
+volatile sntv4_r09_t sntv4_r09 = SNTv4_R09_DEFAULT;
 volatile sntv4_r17_t sntv4_r17 = SNTv4_R17_DEFAULT;
-volatile sntv4_r19_t sntv4_r19 = SNTv4_R19_DEFAULT;
-volatile sntv4_r1A_t sntv4_r1A = SNTv4_R1A_DEFAULT;
 
 volatile lntv1a_r00_t lntv1a_r00 = LNTv1A_R00_DEFAULT;
 volatile lntv1a_r01_t lntv1a_r01 = LNTv1A_R01_DEFAULT;
@@ -331,31 +329,19 @@ void xo_init( void ) {
 
 }
 
-static uint32_t get_timer_cnt() {
-    if(enumerated != ENUMID) { return 0; }
-    set_halt_until_mbus_trx();
-    mbus_copy_registers_from_remote_to_local(SNT_ADDR, 0x1B, 0x0, 1);
-    set_halt_until_mbus_tx();
-
-    delay(MBUS_DELAY);
-
-    return ((*REG0 & 0xFF) << 24) | (*REG1 & 0xFFFFFF);
+inline static uint32_t get_timer_cnt() {
+    return ((*REG_XOT_VAL_U & 0xFFFF) << 16) | (*REG_XOT_VAL_L & 0xFFFF);
 }
 
 void update_system_time() {
-    uint32_t val = xo_sys_time_in_sec;
+    uint32_t val = xo_sys_time;
     xo_sys_time = get_timer_cnt();
-    xo_sys_time_in_sec = xo_sys_time >> 10;
-    xo_day_time_in_sec += xo_sys_time_in_sec - val;
+    xo_sys_time_in_sec = xo_sys_time >> 15;
+    xo_day_time_in_sec += (xo_sys_time - val) >> 15;
 
     if(xo_day_time_in_sec >= 86400) {
         xo_day_time_in_sec -= 86400;
     }
-
-    mbus_write_message32(0xC2, xo_sys_time);
-    mbus_write_message32(0xC1, xo_sys_time_in_sec);
-    mbus_write_message32(0xC0, xo_day_time_in_sec);
-
 }
 
 bool xo_check_is_day() {
@@ -426,53 +412,29 @@ static uint16_t process_temp(uint32_t temp_code){
 }
 
 static inline void snt_clk_init() {	// NOTE: now using LNT TIMER
-    
-    sntv4_r09_t sntv4_r09 = SNTv4_R09_DEFAULT;
-    sntv4_r0A_t sntv4_r0A = SNTv4_R0A_DEFAULT;
-
     // start SNT clock
     sntv4_r08.TMR_SLEEP = 0;
     sntv4_r08.TMR_ISOLATE = 0;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-
-    // delay(10000);
 
     sntv4_r09.TMR_SELF_EN = 0;
     mbus_remote_register_write(SNT_ADDR, 0x9, sntv4_r09.as_int);
 
     sntv4_r08.TMR_EN_OSC = 1;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    delay(10000);
 
     sntv4_r08.TMR_RESETB = 1;
     sntv4_r08.TMR_RESETB_DIV = 1;
     sntv4_r08.TMR_RESETB_DCDC = 1;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    delay(10000);	// need to wait for clock to stabilize
 
     sntv4_r08.TMR_EN_SELF_CLK = 1;
     sntv4_r09.TMR_SELF_EN = 1;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
     mbus_remote_register_write(SNT_ADDR, 0x9, sntv4_r09.as_int);
-    delay(100000);
 
-    sntv4_r08.TMR_EN_OSC = 0;
-    mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    delay(10000);
-
-    sntv4_r19.WUP_THRESHOLD_EXT = 0;
-    sntv4_r1A.WUP_THRESHOLD = 0;
-    mbus_remote_register_write(SNT_ADDR, 0x19, sntv4_r19.as_int);
-    mbus_remote_register_write(SNT_ADDR, 0x1A, sntv4_r1A.as_int);
-
-    sntv4_r17.WUP_ENABLE = 0;
-    mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
-
-    sntv4_r17.WUP_ENABLE = 1;
-    sntv4_r17.WUP_CLK_SEL = 0;
-    sntv4_r17.WUP_LC_IRQ_EN = 0;
-    sntv4_r17.WUP_AUTO_RESET = 0;
-    mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
+    // sntv4_r08.TMR_EN_OSC = 0;
+    // mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
 }
 
 // static void set_snt_timer(uint32_t end_time) {
@@ -688,7 +650,7 @@ static void lnt_stop() {
     set_halt_until_mbus_trx();
     mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
     set_halt_until_mbus_tx();
-    lnt_sys_light = (((*REG1 & 0xFFFFFF) << 24) | (*REG0));
+    lnt_sys_light = (((*REG1 & 0xFFFFFF) << 24) | (*REG0)) >> lnt_counter_base;
     mbus_write_message32(0xE0, lnt_sys_light >> 32);
     mbus_write_message32(0xE1, lnt_sys_light & 0xFFFFFFFF);
 
@@ -698,44 +660,38 @@ static void lnt_stop() {
     mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
     delay(MBUS_DELAY*100);
     
-    // Reset LNT //lntv1a_r00.RESET_AFE = 0x1; // Default : 0x1
-    lntv1a_r00.RESETN_DBE = 0x0; // Default : 0x0
-    mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
+    // Reset LNT
+    //lntv1a_r00.RESET_AFE = 0x1; // Default : 0x1
+    //lntv1a_r00.RESETN_DBE = 0x0; // Default : 0x0
+    //mbus_remote_register_write(LNT_ADDR,0x00,lntv1a_r00.as_int);
     //delay(MBUS_DELAY*100);
 }
 
-#define TIMER_MARGIN 256
-#define MPLIER_SHIFT 6
-uint8_t lnt_snt_mplier = 0x52;
-uint32_t projected_end_time = 0;
-
-static void update_lnt_timer() {
-    if(xo_sys_time > projected_end_time + TIMER_MARGIN 
-	&& xo_sys_time_in_sec - (projected_end_time >> 10) < 256) {
-        lnt_snt_mplier--;
-    }
-    else if(xo_sys_time < projected_end_time - TIMER_MARGIN 
-		&& (projected_end_time >> 10) - xo_sys_time_in_sec < 256) {
-        lnt_snt_mplier++;
-    }
-    mbus_write_message32(0xE4, (int32_t) (projected_end_time - xo_sys_time));
-    mbus_write_message32(0xE4, lnt_snt_mplier);
-}
-
 static void set_lnt_timer(uint32_t end_time) {
-    mbus_write_message32(0xCE, end_time);
-    projected_end_time = end_time << 10;
-
+    mbus_write_message32(0xEE, 0xFFFFAAAA);
+    update_system_time();
     if(end_time <= xo_sys_time_in_sec) {
         sys_err(0x0);	// FIXME: remove this error message. Would rather have timing off than crash
     }
 
-    uint64_t temp = (projected_end_time - xo_sys_time) * lnt_snt_mplier;
-    uint32_t val = temp >> (MPLIER_SHIFT + 8);
-    // uint32_t val = (end_time - xo_sys_time_in_sec) * 4;
-    lntv1a_r03.TIME_COUNTING = val;
-    mbus_remote_register_write(LNT_ADDR, 0x03, lntv1a_r03.as_int);
-    lnt_start();
+    // TODO: set lnt timer
+    if(!lnt_start_meas) {
+	uint32_t val = (end_time - xo_sys_time_in_sec) * 1564;
+	mbus_remote_register_write(LNT_ADDR, 0x41, (val >> 24));
+	mbus_remote_register_write(LNT_ADDR, 0x42, val & 0xFFFFFF);
+
+	lntv1a_r40.WUP_ENABLE = 1;
+	lntv1a_r40.WUP_LC_IRQ_EN = 1;
+	lntv1a_r40.WUP_AUTO_RESET = 1;
+	mbus_remote_register_write(LNT_ADDR, 0x40, lntv1a_r40.as_int);
+    }
+    else {
+	uint32_t val = (end_time - xo_sys_time_in_sec) * 8;
+    	lntv1a_r03.TIME_COUNTING = val;
+	mbus_remote_register_write(LNT_ADDR, 0x03, lntv1a_r03.as_int);
+	lnt_start();
+    }
+    mbus_write_message32(0xCE, end_time - xo_sys_time_in_sec);
 }
 
 static uint16_t update_light_interval() {
@@ -775,7 +731,6 @@ static void set_next_time(uint8_t idx, uint16_t step) {
     update_system_time();
     xot_timer_list[idx] = xot_last_timer_list[idx];
     while(xo_sys_time_in_sec + 5 > xot_timer_list[idx]) {    // give some margin of error
-	mbus_write_message32(0xD3, xot_timer_list[idx]);
         xot_timer_list[idx] += step;
     }
 }
@@ -1484,9 +1439,9 @@ static void mrr_send_radio_data(uint8_t last_packet) {
     mbus_write_message32(0xBB, 0xBBBBBBBB);
     mbus_write_message32(0xBB, 0x00000000);
     
-    mbus_write_message32(0xE0, crc_data[0]);
-    mbus_write_message32(0xE1, crc_data[1]);
-    mbus_write_message32(0xE2, crc_data[2]);
+    mbus_write_message32(0xE0, radio_data_arr[0]);
+    mbus_write_message32(0xE1, radio_data_arr[1]);
+    mbus_write_message32(0xE2, radio_data_arr[2]);
     
     mbus_write_message32(0xBB, 0x00000000);
     mbus_write_message32(0xBB, 0xBBBBBBBB);
@@ -1500,9 +1455,9 @@ static void mrr_send_radio_data(uint8_t last_packet) {
     }
     
     mbus_remote_register_write(MRR_ADDR,0xD, radio_data_arr[0] & 0xFFFFFF);
-    mbus_remote_register_write(MRR_ADDR,0xE, (radio_data_arr[1] << 8) | ((radio_data_arr[0] >> 24) & 0xFF));
-    mbus_remote_register_write(MRR_ADDR,0xF, (radio_data_arr[2] << 16) | ((radio_data_arr[1] >> 16) & 0xFFFF));
-    mbus_remote_register_write(MRR_ADDR,0x10, ((crc_data[0] & 0xFFFF) << 8 | (radio_data_arr[2] >> 8) & 0xFF));
+    mbus_remote_register_write(MRR_ADDR,0xE, (radio_data_arr[1] << 8) | (radio_data_arr[0] >> 24));
+    mbus_remote_register_write(MRR_ADDR,0xF, (radio_data_arr[2] << 16 | radio_data_arr[1] >> 16));
+    mbus_remote_register_write(MRR_ADDR,0x10, ((crc_data[0] & 0xFFFF) << 8 | radio_data_arr[2] >> 8));
 
     if (!radio_ready){
 	radio_ready = 1;
@@ -1758,7 +1713,7 @@ static void operation_init( void ) {
     // PMU_SLEEP_SETTINGS[7] = 0x01010101;
 
     // Initialization
-    // xo_init();
+    xo_init();
 
     // BREAKPOINT 0x02
     mbus_write_message32(0xBA, 0x02);
@@ -1775,7 +1730,7 @@ static void operation_init( void ) {
     sntv4_r07.TSNS_INT_RPLY_REG_ADDR   = 0x00;
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
 
-    snt_clk_init();
+    // snt_clk_init();
     operation_temp_run();
 #ifdef USE_PMU
     // pmu_setting_temp_based(0);
@@ -1856,9 +1811,27 @@ void handler_ext_int_reg2       (void) __attribute__ ((interrupt ("IRQ")));
 void handler_ext_int_reg3       (void) __attribute__ ((interrupt ("IRQ")));
 
 void handler_ext_int_wakeup( void ) { // WAKEUP
+    update_system_time();
 
     *NVIC_ICPR = (0x1 << IRQ_WAKEUP);
 
+    mbus_write_message32(0xEE, *SREG_WAKEUP_SOURCE);
+    mbus_write_message32(0xEE, *GOC_DATA_IRQ);
+
+    // check wakeup is due to GOC
+    if(*SREG_WAKEUP_SOURCE & 1) {
+        if(!(*GOC_DATA_IRQ)) {
+            operation_sleep(); // Need to protect against spurious wakeups
+        }
+        set_goc_cmd();
+        reset_timers_list();
+    }
+
+    sntv4_r17.WUP_ENABLE = 0;
+    mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
+
+    mbus_write_message32(0xC0, xo_day_time_in_sec);
+    mbus_write_message32(0xC1, xo_sys_time_in_sec);
 }
 
 void handler_ext_int_gocep( void ) { // GOCEP
@@ -1911,26 +1884,23 @@ int main() {
     }
 
     update_system_time();
-    update_lnt_timer();
 
-    mbus_write_message32(0xEE, *SREG_WAKEUP_SOURCE);
-    mbus_write_message32(0xEE, *GOC_DATA_IRQ);
+    sntv4_r17.WUP_ENABLE = 0;
+    mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
 
     // check wakeup is due to GOC
     if(*SREG_WAKEUP_SOURCE & 1) {
-        if(!(*GOC_DATA_IRQ)) {
-            operation_sleep(); // Need to protect against spurious wakeups
-        }
         set_goc_cmd();
         reset_timers_list();
     }
-
-    lnt_start_meas = 2;
-    lnt_stop();
+	
+    if(lnt_start_meas == 1) {
+        lnt_start_meas = 2;
+        lnt_stop();
+    }
 
     operation_temp_run();
-    pmu_adc_read_latest();
-    mbus_write_message32(0xAA, read_data_batadc);
+    // pmu_adc_read_latest();
 
     sys_run_continuous = 0;
     do {
@@ -1955,35 +1925,20 @@ int main() {
                 goc_state = 1;
                 lnt_start_meas = 1;
             }
-            else if(goc_state == 1) {
-		op_counter++;
+            else if(lnt_start_meas == 2) {
 		lnt_start_meas = 0;
 		goc_state = 0;
-                pmu_setting_temp_based(1);
                 reset_radio_data_arr();
-                radio_data_arr[0] = lnt_sys_light & 0xFFFFFFFF;
-                radio_data_arr[1] = lnt_sys_light >> 32;
-                radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
-                mrr_send_radio_data(0);
                 radio_data_arr[0] = snt_sys_temp_code;
-                radio_data_arr[1] = read_data_batadc;
-                radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
-                mrr_send_radio_data(0);
-		reset_radio_data_arr();
-		update_system_time();
-		radio_data_arr[0] = xo_sys_time;
-                radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
+                radio_data_arr[1] = lnt_sys_light;
+                radio_data_arr[2] = xo_sys_time_in_sec;
+                pmu_setting_temp_based(1);
                 mrr_send_radio_data(1);
                 pmu_setting_temp_based(0);
 
-		set_next_time(START_LNT, 100);
+		set_next_time(START_LNT, 60);
             }
         }
-	else if(goc_component == 0x02) {
-	    update_system_time();
-	    mbus_write_message32(0xC1, xo_sys_time);
-	    mbus_sleep_all();
-	}
         else if(goc_component == 0x04) {
             if(goc_func_id == 0x01) {
 		if(goc_state == 0) {
@@ -2134,15 +2089,27 @@ int main() {
     uint32_t min_time = 0xFFFFFFFF;
     update_system_time();
     uint8_t i;
-    if(lnt_start_meas == 1) {
-    	min_time = xo_sys_time_in_sec + LNT_MEAS_TIME;
+    for(i = 0; i < XOT_TIMER_LIST_LEN; i++) {
+    	if(xot_timer_list[i] != 0 && xot_timer_list[i] <= min_time) {
+	    min_time = xot_timer_list[i];
+	}
     }
-    else {
-        for(i = 0; i < XOT_TIMER_LIST_LEN; i++) {
-        	if(xot_timer_list[i] != 0 && xot_timer_list[i] <= min_time) {
-                min_time = xot_timer_list[i];
-            }
-        }
+
+    if(lnt_start_meas == 1) {
+	uint16_t sleep_time;
+	if(min_time == 0xFFFFFFFF) {
+	    sleep_time = 60;	// set arbitrary value so lnt counting time will default to 32
+	}
+	else {
+	    sleep_time = min_time - xo_sys_time_in_sec;
+	}
+	
+	lnt_counter_base = 0;
+	while(((LNT_MEAS_TIME << (lnt_counter_base + 1)) + 10 < sleep_time) && lnt_counter_base < 4) {
+	    lnt_counter_base++;
+	}
+	update_system_time();
+	min_time = xo_sys_time_in_sec + LNT_MEAS_TIME << lnt_counter_base;
     }
 
     if(min_time != 0xFFFFFFFF) {

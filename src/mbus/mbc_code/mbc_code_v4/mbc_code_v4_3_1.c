@@ -258,9 +258,9 @@ void update_system_time() {
         xo_day_time_in_sec -= XO_MAX_DAY_TIME_IN_SEC;
     }
 
-    mbus_write_message32(0xC2, xo_sys_time);
+    // mbus_write_message32(0xC2, xo_sys_time);
     mbus_write_message32(0xC1, xo_sys_time_in_sec);
-    mbus_write_message32(0xC0, xo_day_time_in_sec);
+    // mbus_write_message32(0xC0, xo_day_time_in_sec);
 }
 
 bool xo_check_is_day() {
@@ -338,6 +338,9 @@ static bool long_int_lte(const long_int lhs, const long_int rhs) {
 }
 
 uint16_t log2(uint64_t input) {
+    // mbus_write_message32(0xE7, input & 0xFFFFFFFF);
+    // mbus_write_message32(0xE8, input >> 32);
+
     if(input == 0) { return 0; }
 
     uint32_t temp_result[LONG_INT_LEN], input_storage[LONG_INT_LEN];
@@ -351,7 +354,6 @@ uint16_t log2(uint64_t input) {
     uint16_t out = 0;
 
     for(i = 47; i >= 0; i--) {
-	mbus_write_message32(0xA8, i);
         if(right_shift(input, i) & 0b1) {
             uint64_t temp = right_shift(1, -i);
             temp_result[0] = temp & 0xFFFFFFFF;
@@ -360,21 +362,10 @@ uint16_t log2(uint64_t input) {
             break;
         }
     }
-    mbus_write_message32(0xE9, out);
     for(i = 0; i < LOG2_RES; i++) {
         uint32_t new_result[4];
         long_int_mult(temp_result, LOG_CONST_ARR[i], new_result);
-	// mbus_write_message32(0xE8, 0xEEE1);
         long_int_mult(input_storage, (1 << 15), input_storage);
-	// mbus_write_message32(0xE8, 0xEEE2);
-
-	int j;
-	for(j = 0; j < LONG_INT_LEN; j++) {
-	    mbus_write_message32(0xD6, new_result[j]);
-	}
-	for(j = 0; j < LONG_INT_LEN; j++) {
-	    mbus_write_message32(0xD7, input_storage[j]);
-	}
 
         if(long_int_lte(new_result, input_storage)) {
             long_int_assign(temp_result, new_result);
@@ -386,8 +377,8 @@ uint16_t log2(uint64_t input) {
         }
 
     }
-    // mbus_write_message32(0xEA, 0xEEEE);
 
+    // mbus_write_message32(0xE9, out & 0x7FF);
     return out & 0x7FF;
 }
 
@@ -494,7 +485,7 @@ uint8_t compress_light() {
     uint16_t log_light = log2(lnt_sys_light + 1) & 0x3FF;   // remember to subtract 1 when parsing
     if(light_storage_remainder == LIGHT_MAX_REMAINDER) {
         uint8_t i;
-        for(i = 0; i < 8; i++) {
+        for(i = 0; i < 6; i++) {
             light_code_storage[i] = 0;
         }
         lnt_l1_len = 0;
@@ -796,7 +787,7 @@ static void lnt_init() {
     
     // Run FDIV
     lntv1a_r17.FDIV_RESETN = 0x1; // Default : 0x0
-    lntv1a_r17.FDIV_CTRL_FREQ = 0x0; // Default : 0x0
+    lntv1a_r17.FDIV_CTRL_FREQ = 0x8; // Default : 0x0
     mbus_remote_register_write(LNT_ADDR,0x17,lntv1a_r17.as_int);
     delay(MBUS_DELAY*10);
     
@@ -901,7 +892,7 @@ static void update_lnt_timer() {
 }
 
 static void set_lnt_timer(uint32_t end_time) {
-    // mbus_write_message32(0xCE, end_time);
+    mbus_write_message32(0xCE, end_time);
     projected_end_time = end_time << XO_TO_SEC_SHIFT;
 
     if(end_time <= xo_sys_time_in_sec) {
@@ -1572,7 +1563,7 @@ static void mrr_send_radio_data(uint8_t last_packet) {
     uint8_t num_packets = 1;
     if (mrr_freq_hopping) num_packets = mrr_freq_hopping;
 
-    mrr_cfo_val_fine = 0x2000;
+    mrr_cfo_val_fine = 0x0000;
 
     while (count < num_packets){
 	// may be able to remove 2 lines below, GC 1/6/20
@@ -1592,8 +1583,6 @@ static void mrr_send_radio_data(uint8_t last_packet) {
 
     radio_packet_count++;
 #endif
-    mbus_write_message32(0xEE, 0xEEEEEEEE);
-
     if (last_packet){
 	radio_ready = 0;
 	radio_power_off();
@@ -1601,7 +1590,6 @@ static void mrr_send_radio_data(uint8_t last_packet) {
 	mrrv7_r11.MRR_RAD_FSM_EN = 0;
 	mbus_remote_register_write(MRR_ADDR,0x11,mrrv7_r11.as_int);
     }
-    mbus_write_message32(0xDD, 0xDDDDDDDD);
 }
 
 static inline void mrr_init() {
@@ -1709,8 +1697,9 @@ static inline void mrr_init() {
 
 static void operation_init( void ) {
     // BREAKPOINT 0x01
-    mbus_write_message32(0xBA, 0x01);
+    // mbus_write_message32(0xBA, 0x01);
 
+    // FIXME: turn WD back on?
     *TIMERWD_GO = 0x0; // Turn off CPU watchdog timer
     *REG_MBUS_WD = 0; // Disables Mbus watchdog timer
     config_timer32(0, 0, 0, 0);
@@ -1739,8 +1728,6 @@ static void operation_init( void ) {
     delay(MBUS_DELAY);
 #endif
 
-    mbus_write_message32(0xC4, log2(0x34600));
-
     // Default CPU halt function
     set_halt_until_mbus_tx();
 
@@ -1750,10 +1737,6 @@ static void operation_init( void ) {
     // BREAKPOINT 0x02
     // mbus_write_message32(0xBA, 0x02);
     // mbus_write_message32(0xED, PMU_ACTIVE_SETTINGS[0]);
-
-#ifdef USE_PMU
-    pmu_init();
-#endif
 
 #ifdef USE_SNT
     sntv4_r01.TSNS_BURST_MODE = 0;
@@ -1765,8 +1748,8 @@ static void operation_init( void ) {
     mbus_remote_register_write(SNT_ADDR, 7, sntv4_r07.as_int);
 
     snt_clk_init();
+    snt_state = SNT_IDLE;
     operation_temp_run();
-
 #endif
 
 #ifdef USE_LNT
@@ -1778,6 +1761,11 @@ static void operation_init( void ) {
     radio_on = 0;
     radio_ready = 0;
 #endif
+
+#ifdef USE_PMU
+    pmu_init();
+#endif
+
 
 }
 
@@ -1887,6 +1875,7 @@ int main() {
 
     if(enumerated != ENUMID) {
         operation_init();
+	set_lnt_timer(xo_sys_time_in_sec + 5);
         operation_sleep_notimer();
     }
     update_system_time();
@@ -1894,8 +1883,8 @@ int main() {
 
     pmu_setting_temp_based(0);
 
-    mbus_write_message32(0xEE, *SREG_WAKEUP_SOURCE);
-    mbus_write_message32(0xEE, *GOC_DATA_IRQ);
+    // mbus_write_message32(0xEE, *SREG_WAKEUP_SOURCE);
+    // mbus_write_message32(0xEE, *GOC_DATA_IRQ);
 
     // check wakeup is due to GOC
     if(*SREG_WAKEUP_SOURCE & 1) {
@@ -1934,11 +1923,9 @@ int main() {
 		radio_data_arr[0] = log2(lnt_sys_light);
                 radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
                 mrr_send_radio_data(1);
-		mbus_write_message32(0xE6, 0xCCCC);
                 pmu_setting_temp_based(0);
 	    }
 
-	    mbus_write_message32(0xEC, 0xCCCC);
 	    set_next_time(STORE_LNT, 706); // 56.25*2 sec
 
         }
@@ -2002,7 +1989,7 @@ int main() {
                     }
                 }
                 else if(goc_state == 2) {
-                    if(xot_timer_list[SEND_RAD] = 0xFFFFFFFF) {
+                    if(xot_timer_list[SEND_RAD] == 0xFFFFFFFF) {
                         pmu_setting_temp_based(1);
 
                         if(xo_check_is_day()) {

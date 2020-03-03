@@ -15,6 +15,10 @@
  *  Added self adjusting timer multiplier
  *  fix do while loop in set_next_time
  *  Adjust PMU setting based on temp
+ *  Fix light shift upper half bug
+ *  Fix reduce_len_counter initialization bug
+ *  Fix light store time bug
+ *  Fix % operator bug
  ******************************************************************************************/
 
 #include "../include/PREv20.h"
@@ -104,7 +108,6 @@ volatile mrrv7_r13_t mrrv7_r13 = MRRv7_R13_DEFAULT;
 volatile uint32_t enumerated;
 volatile uint16_t op_counter;
 volatile uint8_t wfi_timeout_flag = 0;
-volatile uint8_t sys_run_continuous;
 
 uint8_t goc_component;
 uint8_t goc_func_id;
@@ -113,8 +116,8 @@ uint16_t goc_data;
 
 // FIXME: fix these constants
 #define SNT_OP_MAX_COUNT 13   // FIXME: change this to 133 22 hours and ten minutes
-#define XO_DAY_START 5*60  // 5 am
-#define XO_DAY_END  19*60   // 7 pm
+#define XO_DAY_START 38232  // 7 am
+#define XO_DAY_END  103773   // 7 pm
 volatile uint32_t xo_sys_time = 0;
 volatile uint32_t xo_sys_time_in_sec = 0;
 volatile uint32_t xo_day_time_in_sec = 0;
@@ -123,7 +126,7 @@ volatile uint32_t xo_day_time_in_sec = 0;
 volatile uint32_t xot_timer_list[3] = {0, 0, 0};
 volatile uint32_t xot_last_timer_list[3] = {0, 0, 0};
 
-#define SNT_TEMP_UPDATE_TIME 706   // 450 seconds
+#define SNT_TEMP_UPDATE_TIME 680   // 450 seconds
 volatile uint32_t snt_sys_temp_code = 0x3E9;	// default 20C
 volatile uint8_t snt_state = SNT_IDLE;
 volatile uint8_t snt_counter = 0;
@@ -138,7 +141,8 @@ volatile uint8_t lnt_cur_level = 0;
 const uint16_t LNT_UPPER_THRESH[3] = {500, 1500, 5000};
 const uint16_t LNT_LOWER_THRESH[3] = {300, 1200, 4000};
 #endif
-const uint32_t LNT_INTERVAL[4] = {56.25, 112.5, 450, 1800};  // 56.25, 112.5, 450, 1800 seconds
+const uint16_t LNT_INTERVAL[4] = {85, 170, 680, 2720};  // 56.25, 112.5, 450, 1800 seconds
+const uint32_t LNT_TIME_THRESH[8] = {27309, 38232, 49155, 54617, 76464, 81926, 92849, 103773};
 volatile uint64_t lnt_sys_light = 0;
 
 #define MRR_SIGNAL_PERIOD   300     // 5 minutes
@@ -191,7 +195,7 @@ volatile uint32_t radio_data_arr[3];
 volatile uint32_t radio_packet_count;
 
  #define TEMP_MAX_REMAINDER 96-16-1-3-4-4-11 // 96-(CRC+TEMP_OR_LIGHT+PACKET_NUM+PACKET_HEADER+TIMESTAMP) = 57
- #define LIGHT_MAX_REMAINDER 192-16*2-1*2-3*2-4*2-11-11 // 96-(CRC*2+TEMP_OR_LIGHT*2+PACKET_NUM*2+PACKET_HEADER*2+TIMESTAMP) = 122
+ #define LIGHT_MAX_REMAINDER 192-16*2-1*2-3*2-4*2-11-11+1 // 96-(CRC*2+TEMP_OR_LIGHT*2+PACKET_NUM*2+PACKET_HEADER*2+TIMESTAMP)+signal_bit = 123
 
 volatile uint16_t mem_temp_addr = 7000;
 volatile uint16_t mem_temp_len = 0;
@@ -205,7 +209,7 @@ volatile uint8_t l1_header_stored = 0, l2_header_stored = 0;
 volatile uint8_t l1_cur_meas_time_mode = 0;
 volatile uint8_t lnt_l1_len = 0, lnt_l2_len = 0;
 volatile uint8_t reduce_len_counter = 0;
-volatile uint8_t light_storage_remainder = 160;
+volatile uint8_t light_storage_remainder = LIGHT_MAX_REMAINDER;
 volatile uint16_t last_log_light = 0;
 volatile uint32_t light_code_storage[6];
 volatile uint32_t temp_code_storage[3];
@@ -382,14 +386,29 @@ uint16_t log2(uint64_t input) {
     return out & 0x7FF;
 }
 
-static void temp_shift_left_store(uint32_t data, uint8_t len) {
-    data &= ((1 << len) - 1);
+void print_temp_compress() {
+    uint8_t i = 0;
+    for(i = 0; i < 3; i++) {
+	mbus_write_message32(0xB0 + i, temp_code_storage[i]);
+    }
+}
 
-    temp_code_storage[1] = temp_code_storage[1] << len;
-    temp_code_storage[1] |= (temp_code_storage[0] >> (32 - len));
-    temp_code_storage[0] = temp_code_storage[0] << len;
+static void temp_shift_left_store(uint32_t data, uint8_t len) {
+    mbus_write_message32(0xB6, data);
+    mbus_write_message32(0xB7, len);
+    // data &= ((1 << len) - 1);
+    data &= right_shift(1, len) - 1;
+
+    // temp_code_storage[1] = temp_code_storage[1] << len;
+    // temp_code_storage[1] |= (temp_code_storage[0] >> (32 - len));
+    // temp_code_storage[0] = temp_code_storage[0] << len;
+    temp_code_storage[1] = right_shift(temp_code_storage[1], -len);
+    temp_code_storage[1] |= right_shift(temp_code_storage[0], (32 - len));
+    temp_code_storage[0] = right_shift(temp_code_storage[0], -len);
     temp_code_storage[0] |= data;
     temp_storage_remainder -= len;
+
+    print_temp_compress();
 }
 
 static void store_temp() {
@@ -397,8 +416,10 @@ static void store_temp() {
         temp_code_storage[2] = /*(0 << 15) |*/ (temp_packet_num << 12) | (CHIP_ID << 8) | ((xo_day_time_in_sec >> 9) & 0xFF);
         temp_code_storage[1] |= ((xo_day_time_in_sec >> 6) & 0x7);
         mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) (mem_temp_addr + mem_temp_len), (uint32_t*) temp_code_storage, 2);
-        temp_packet_num = (temp_packet_num + 1) % 3;
+        temp_packet_num = (temp_packet_num + 1) & 7;
         mem_temp_len += 3;
+
+	print_temp_compress();
     }
 }
 
@@ -411,6 +432,7 @@ static void compress_temp() {
 
     uint8_t log_temp = (log2(snt_sys_temp_code) & 0b1111100000) >> 5; // Take only the decimal value
 
+    mbus_write_message32(0xB5, log_temp);
     temp_shift_left_store(log_temp, 5);
     if(temp_storage_remainder < 5) {
         store_temp();
@@ -418,18 +440,31 @@ static void compress_temp() {
     }
 }
 
+void print_light_compress() {
+    uint8_t i = 0;
+    for(i = 0; i < 6; i++) {
+	mbus_write_message32(0xD0 + i, light_code_storage[i]);
+    }
+}
+
 static void light_left_shift_store(uint32_t data, uint8_t len) {
-    data &= ((1 << len) - 1);
+    mbus_write_message32(0xA6, data);
+    mbus_write_message32(0xA7, len);
+    // data &= ((1 << len) - 1);
+    data &= (right_shift(1, -len) - 1);
 
     int8_t i;
     for(i = 5; i >= 1; i--) {
-        light_code_storage[i] = light_code_storage[i] << len;
-        light_code_storage[i] |= (light_code_storage[i - 1] >> (32 - len));
+        // light_code_storage[i] = light_code_storage[i] << len;
+        // light_code_storage[i] |= (light_code_storage[i - 1] >> (32 - len));
+        light_code_storage[i] = right_shift(light_code_storage[i], -len);
+        light_code_storage[i] |= right_shift(light_code_storage[i - 1], (32 - len));
     }
-    light_code_storage[0] = light_code_storage[i] << len;
+    light_code_storage[0] = right_shift(light_code_storage[i], -len);
     light_code_storage[0] |= data;
 
     light_storage_remainder -= len;
+    print_light_compress();
 }
 
 static void store_l1_header() {
@@ -458,20 +493,22 @@ static void store_light() {
         store_l1_header();
 
         light_left_shift_store(last_log_light, 11); // final ref data
-        light_left_shift_store((xo_day_time_in_sec >> 6 & 0x7FF), 11); // final timestamp
+        light_left_shift_store((xo_day_time_in_sec >> 6) & 0x7FF, 11); // final timestamp
 
         // shift upper half
         int8_t i;
-        for(i = 5; i >= 3; i--) {
+        for(i = 5; i >= 4; i--) {
             light_code_storage[i] = light_code_storage[i] << 24;
             light_code_storage[i] |= (light_code_storage[i - 1] >> (32 - 24));
         }
-        light_code_storage[3] |= light_code_storage[2] >> (32 - 24);
+        light_code_storage[3] &= 0xFF;
 
         light_code_storage[5] |= ((1 << 15) | (light_packet_num << 12) | (CHIP_ID << 8));
-        light_packet_num++;
+        light_packet_num = (light_packet_num + 1) & 7;
         light_code_storage[2] |= ((1 << 15) | (light_packet_num << 12) | (CHIP_ID << 8));
-        light_packet_num++;
+        light_packet_num = (light_packet_num + 1) & 7;
+
+	print_light_compress();
 
         mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) (mem_light_addr + mem_light_len), light_code_storage + 3, 2);
         mem_light_len += 3;
@@ -480,10 +517,10 @@ static void store_light() {
     }
 }
 
-
 uint8_t compress_light() {
     uint16_t log_light = log2(lnt_sys_light + 1) & 0x3FF;   // remember to subtract 1 when parsing
-    if(light_storage_remainder == LIGHT_MAX_REMAINDER) {
+    mbus_write_message32(0xA5, log_light);
+    if(light_storage_remainder == LIGHT_MAX_REMAINDER) {	// bug here
         uint8_t i;
         for(i = 0; i < 6; i++) {
             light_code_storage[i] = 0;
@@ -492,20 +529,24 @@ uint8_t compress_light() {
         lnt_l2_len = 0;
         l1_cur_meas_time_mode = lnt_meas_time_mode;
         cur_len_mode = 0xFF;
+	// subtract signal bit
+	light_storage_remainder--;
+	reduce_len_counter = 0;
     }
     else {
         int16_t diff = last_log_light - log_light;
         uint8_t len = 0;
         uint8_t len_mode = 0;
-        if(diff < 7 && diff > -8) { // 4 bit storage
+	mbus_write_message32(0xA4, diff);
+        if(diff <= 7 && diff >= -8) { // 4 bit storage
             len = 4;
             len_mode = 0;
         }
-        else if(diff < 31 && diff > -32) {  // 6 bit storage
+        else if(diff <= 31 && diff >= -32) {  // 6 bit storage
             len = 6;
             len_mode = 1;
         }
-        else if(diff < 255 && diff > -256) {    // 9 bit storage
+        else if(diff <= 255 && diff >= -256) {    // 9 bit storage
             len = 9;
             len_mode = 2;
         }
@@ -515,17 +556,22 @@ uint8_t compress_light() {
             len_mode = 3;
         }
 
-        diff = diff & ((1 << len) - 1);
+        diff = diff & (right_shift(1, -len) - 1);
 
         if(cur_len_mode != 0xFF) {
             if(len_mode < cur_len_mode) {
                 reduce_len_counter++;
             }
+	    else {
+                reduce_len_counter = 0;
+	    }
 
             // check if need to commit L2 header
-            if(len_mode > cur_len_mode || reduce_len_counter >= 3 || lnt_l2_len >= ((1 << (6 - cur_len_mode)) - 1)) {
+            if(len_mode > cur_len_mode 
+		|| reduce_len_counter >= 3 
+		//|| lnt_l2_len >= ((1 << (6 - cur_len_mode)) - 1)) {
+		|| lnt_l2_len >= (right_shift(1, -6 + cur_len_mode) - 1)) {
                 store_l2_header();
-                reduce_len_counter = 0;
             }
         }
         cur_len_mode = len_mode;
@@ -545,7 +591,6 @@ uint8_t compress_light() {
         }
         light_left_shift_store(diff, len);
         lnt_l2_len++;
-
     }
     last_log_light = log_light;
     return 0;
@@ -666,8 +711,8 @@ static inline void snt_clk_init() {
     sntv4_r08_t sntv4_r08 = SNTv4_R08_DEFAULT;
     sntv4_r09_t sntv4_r09 = SNTv4_R09_DEFAULT;
     sntv4_r17_t sntv4_r17 = SNTv4_R17_DEFAULT;
-    sntv4_r19_t sntv4_r19 = SNTv4_R19_DEFAULT;
-    sntv4_r1A_t sntv4_r1A = SNTv4_R1A_DEFAULT;
+    // sntv4_r19_t sntv4_r19 = SNTv4_R19_DEFAULT;
+    // sntv4_r1A_t sntv4_r1A = SNTv4_R1A_DEFAULT;
 
     // start SNT clock
     sntv4_r08.TMR_SLEEP = 0;
@@ -699,10 +744,10 @@ static inline void snt_clk_init() {
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
     delay(10000);
 
-    sntv4_r19.WUP_THRESHOLD_EXT = 0;
-    sntv4_r1A.WUP_THRESHOLD = 0;
-    mbus_remote_register_write(SNT_ADDR, 0x19, sntv4_r19.as_int);
-    mbus_remote_register_write(SNT_ADDR, 0x1A, sntv4_r1A.as_int);
+    // sntv4_r19.WUP_THRESHOLD_EXT = 0;
+    // sntv4_r1A.WUP_THRESHOLD = 0;
+    mbus_remote_register_write(SNT_ADDR, 0x19, 0);
+    mbus_remote_register_write(SNT_ADDR, 0x1A, 0);
 
     sntv4_r17.WUP_ENABLE = 0;
     mbus_remote_register_write(SNT_ADDR, 0x17, sntv4_r17.as_int);
@@ -816,8 +861,8 @@ static void lnt_init() {
     delay(MBUS_DELAY*10);
     
     // Change Counting Time 
-    lntv1a_r03.TIME_COUNTING = 0xFFFFFF; // Default : 0x258
-    mbus_remote_register_write(LNT_ADDR,0x03,lntv1a_r03.as_int);
+    // lntv1a_r03.TIME_COUNTING = 0xFFFFFF; // Default : 0x258
+    mbus_remote_register_write(LNT_ADDR,0x03,0xFFFFFF);
     delay(MBUS_DELAY*10);
     
     // Change Monitoring & Hold Time 
@@ -864,7 +909,7 @@ static void lnt_stop() {
     set_halt_until_mbus_trx();
     mbus_copy_registers_from_remote_to_local(LNT_ADDR, 0x10, 0x00, 1);
     set_halt_until_mbus_tx();
-    lnt_sys_light = (((*REG1 & 0xFFFFFF) << 24) | (*REG0)); // >> lnt_counter_base; // FIXME: this is wrong?
+    lnt_sys_light = right_shift(((*REG1 & 0xFFFFFF) << 24) | (*REG0), lnt_counter_base); // >> lnt_counter_base;
 
     // // Stop FSM: Counter Idle -> Counter Counting 
     lntv1a_r00.DBE_ENABLE = 0x0; // Default : 0x0
@@ -909,13 +954,16 @@ static void set_lnt_timer(uint32_t end_time) {
 
 static uint16_t update_light_interval() {
 #ifdef LNT_MANUAL_PERIOD
-    if(xo_day_time_in_sec <= XO_DAY_START) {
-    
+    uint8_t i;
+    for(i = 0; i < 4; i++) {
+    	if(xo_day_time_in_sec >= LNT_TIME_THRESH[3 - i]
+		&& xo_day_time_in_sec < LNT_TIME_THRESH[4 + i]) {
+	    lnt_meas_time_mode = 3 - i;
+	    return LNT_INTERVAL[lnt_meas_time_mode];
+	}
     }
+    return 0;
 
-    int lnt_meas_idx = 0;
-    lnt_meas_time_mode = 0;
-    return LNT_INTERVAL[lnt_meas_idx];
 #endif
 #ifndef LNT_MANUAL_PERIOD
     uint8_t i;
@@ -958,9 +1006,10 @@ static void set_next_time(uint8_t idx, uint32_t step) {
     xot_timer_list[idx] = xot_last_timer_list[idx];
     uint32_t diff;
     do {
+	mbus_write_message32(0xD3, xot_timer_list[idx]);
         xot_timer_list[idx] += step;
         diff = xot_timer_list[idx] - xo_sys_time_in_sec;
-    } while(!(diff > 5 && diff < step));    // give some margin of error and prevent overflow
+    } while(!(diff > 5 && diff < (step << 4)));    // give some margin of error and prevent overflow
 }
 
 /**********************************************
@@ -1027,6 +1076,7 @@ static void pmu_reg_write(uint32_t reg_addr, uint32_t reg_data) {
     set_halt_until_mbus_trx();
     mbus_remote_register_write(PMU_ADDR, reg_addr, reg_data);
     set_halt_until_mbus_tx();
+    delay(MBUS_DELAY);
 }
 
 static void pmu_set_adc_period(uint32_t val) {
@@ -1175,9 +1225,9 @@ static void pmu_set_sar_conversion_ratio(uint8_t ratio) {
 		     (0 << 12) |    // let vdd_clk always connect to vbat
 		     (1 << 11) |    // enable override setting [10] (1'h0)
 		     (0 << 10) |    // have the converter have the periodic reset (1'h0)
-		     (i <<  9) |    // enable override setting [8:0] (1'h0)
+		     (1 <<  9) |    // enable override setting [8:0] (1'h0)
 		     (0 <<  8) |    // switch input / output power rails for upconversion (1'h0)
-		     (i <<  7) |    // enable override setting [6:0] (1'h0)
+		     (1 <<  7) |    // enable override setting [6:0] (1'h0)
 		     (ratio)));  // binary converter's conversion ratio (7'h00)
     }
 }
@@ -1205,7 +1255,6 @@ static void pmu_setting_temp_based(uint8_t mode) {
             break;
         }
     }
-    delay(MBUS_DELAY);
     return;
 }
 
@@ -1875,7 +1924,6 @@ int main() {
 
     if(enumerated != ENUMID) {
         operation_init();
-	set_lnt_timer(xo_sys_time_in_sec + 5);
         operation_sleep_notimer();
     }
     update_system_time();
@@ -1906,157 +1954,181 @@ int main() {
         mrr_send_enable = 0;
     }
 
-    sys_run_continuous = 0;
-    do {
-        if(goc_component == 0x01) {
-	    op_counter++;
-	    goc_state = 0;
+    // if(goc_component == 0x01) {
+    //     op_counter++;
+    //     goc_state = 0;
 
-	    if(mrr_send_enable) {
-	        pmu_setting_temp_based(1);
-                reset_radio_data_arr();
-                radio_data_arr[0] = lnt_sys_light & 0xFFFFFFFF;
-                radio_data_arr[1] = lnt_sys_light >> 32;
-                radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
-                mrr_send_radio_data(0);
-	        reset_radio_data_arr();
-		radio_data_arr[0] = log2(lnt_sys_light);
-                radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
-                mrr_send_radio_data(1);
-                pmu_setting_temp_based(0);
-	    }
+    //     if(mrr_send_enable) {
+    //         pmu_setting_temp_based(1);
+    //         reset_radio_data_arr();
+    //         radio_data_arr[0] = lnt_sys_light & 0xFFFFFFFF;
+    //         radio_data_arr[1] = lnt_sys_light >> 32;
+    //         radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
+    //         mrr_send_radio_data(0);
+    //         reset_radio_data_arr();
+    //         radio_data_arr[0] = log2(lnt_sys_light);
+    //         radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
+    //         mrr_send_radio_data(1);
+    //         pmu_setting_temp_based(0);
+    //     }
 
-	    set_next_time(STORE_LNT, 706); // 56.25*2 sec
+    //     set_next_time(STORE_LNT, 706); // 56.25*2 sec
 
-        }
-        else if(goc_component == 0x04) {
-            if(goc_func_id == 0x01) {
-                if(goc_state == 0) {
-                    goc_state = 1;
-                    op_counter = 0;
+    // }
+    // else if(goc_component == 0x04) {
+        if(goc_func_id == 0x01) {
+            if(goc_state == 0) {
+                goc_state = 1;
+                op_counter = 0;
 
-                    xo_day_time_in_sec = (goc_data * 60);
-                    
-                    // start operation in 8 minutes
-                    xot_timer_list[STORE_SNT] = xo_sys_time + SNT_TEMP_UPDATE_TIME;
-                    xot_timer_list[STORE_LNT] = xo_sys_time + LNT_INTERVAL[2];
-                    lnt_meas_time_mode = 0;
+                xo_day_time_in_sec = (goc_data * 56);
+                
+                // start operation in 8 minutes
+                // xot_timer_list[STORE_SNT] = xo_sys_time_in_sec + SNT_TEMP_UPDATE_TIME;
+                // xot_timer_list[STORE_LNT] = xo_sys_time_in_sec + LNT_INTERVAL[2];
+                xot_timer_list[STORE_LNT] = xo_sys_time_in_sec + LNT_INTERVAL[0];
+                xot_timer_list[STORE_SNT] = xot_timer_list[STORE_LNT];
+                xot_timer_list[SEND_RAD] = 0;
+                lnt_meas_time_mode = 0;
+    	    mbus_write_message32(0xBB, xot_timer_list[STORE_LNT]);
+    	    mbus_write_message32(0xBC, xot_timer_list[STORE_SNT]);
 
-                    snt_counter = 3;
-                    radio_beacon_counter = 0;
-                    radio_counter = 0;
+                snt_counter = 3;
+                radio_beacon_counter = 0;
+                radio_counter = 0;
 
-                    radio_data_arr[0] = xo_day_time_in_sec;
-                    radio_data_arr[1] = xo_sys_time_in_sec;
-                    radio_data_arr[2] = 0x04 << 4;
-		    if(mrr_send_enable) {
-			mrr_send_radio_data(1);
-		    }
+                radio_data_arr[0] = xo_day_time_in_sec;
+                radio_data_arr[1] = xo_sys_time_in_sec;
+                radio_data_arr[2] = 0x04 << 4;
+    	    if(mrr_send_enable) {
+    	        pmu_setting_temp_based(1);
+    	        mrr_send_radio_data(1);
+    	        pmu_setting_temp_based(0);
+    	    }
+    	    mbus_write_message32(0xBB, xot_timer_list[STORE_LNT]);
+    	    mbus_write_message32(0xBC, xot_timer_list[STORE_SNT]);
+            }
+            else if(goc_state == 1) {
+                if(op_counter >= SNT_OP_MAX_COUNT) {
+                    goc_state = 2;
+                    reset_timers_list();
+                    store_temp();       // store everything in temp_code_storage
+                    store_light();
+                    update_system_time();
+                    xot_timer_list[SEND_RAD] = xo_sys_time + MRR_SIGNAL_PERIOD;
                 }
-                else if(goc_state == 1) {
-                    if(op_counter >= SNT_OP_MAX_COUNT) {
-                        goc_state = 2;
-                        reset_timers_list();
-                        store_temp();       // store everything in temp_code_storage
-                        store_light();
-                        update_system_time();
-                        xot_timer_list[SEND_RAD] = xo_sys_time + MRR_SIGNAL_PERIOD;
-                    }
 
-                    else {
-                        if(xot_timer_list[STORE_SNT] == 0xFFFFFFFF) {
-                            op_counter++;
-                            pmu_setting_temp_based(0);
+                else {
+    		// mbus_write_message32(0xAA, xot_timer_list[STORE_LNT]);
+                    if(xot_timer_list[STORE_SNT] == 0xFFFFFFFF) {
+                        op_counter++;
 
-                            if(++snt_counter >= 3) {
-                                snt_counter = 0;
-                                compress_temp();
-                            }
-
-                            set_next_time(STORE_SNT, SNT_TEMP_UPDATE_TIME);
-                            mbus_write_message32(0xEA, xot_timer_list[STORE_SNT]);
+                        if(++snt_counter >= 3) {
+                            snt_counter = 0;
+                            compress_temp();
                         }
 
-                        if(xot_timer_list[STORE_LNT] == 0xFFFFFFFF) {
-                            // TODO: compress this
-                            if(compress_light() != 0) {
-                                compress_light();
-                            }
-
-                            set_next_time(STORE_LNT, update_light_interval());
-                            mbus_write_message32(0xEB, xot_timer_list[STORE_LNT]);
-                        }
+                        set_next_time(STORE_SNT, SNT_TEMP_UPDATE_TIME);
+                        // mbus_write_message32(0xEA, xot_timer_list[STORE_SNT]);
                     }
+
+    		uint16_t interval = update_light_interval();
+                    if(xot_timer_list[STORE_LNT] == 0xFFFFFFFF) {
+                        if(compress_light() != 0) {
+                            compress_light();
+                        }
+
+    		    if(interval != 0) {
+    			set_next_time(STORE_LNT, interval);
+    		    }
+    		    else {
+    			// wait till day start
+    		    	xot_timer_list[STORE_LNT] = 0;
+    			store_light();
+    		    }
+    		    // mbus_write_message32(0xEB, xot_timer_list[STORE_LNT]);
+                    }
+    		else if(xot_timer_list[STORE_LNT] == 0 && interval != 0) {
+    		    // sync LNT and SNT
+    		    xot_last_timer_list[STORE_LNT] = xot_last_timer_list[STORE_SNT];
+    		    set_next_time(STORE_LNT, interval);
+    		}
                 }
-                else if(goc_state == 2) {
-                    if(xot_timer_list[SEND_RAD] == 0xFFFFFFFF) {
-                        pmu_setting_temp_based(1);
+            }
+            else if(goc_state == 2) {
+                if(xot_timer_list[SEND_RAD] == 0xFFFFFFFF) {
+                    pmu_setting_temp_based(1);
 
-                        if(xo_check_is_day()) {
-                            // send beacon
-                            reset_radio_data_arr();
-                            radio_data_arr[0] = (0xDD << 24) | ((radio_counter & 0xFF) << 16) | (read_data_batadc & 0xFFFF);
-                            radio_data_arr[1] = snt_sys_temp_code;
-                            radio_data_arr[2] = 0x4 << 4;
+                    if(xo_check_is_day()) {
+                        // send beacon
+                        reset_radio_data_arr();
+                        radio_data_arr[0] = (0xDD << 24) | ((radio_counter & 0xFF) << 16) | (read_data_batadc & 0xFFFF);
+                        radio_data_arr[1] = snt_sys_temp_code;
+                        radio_data_arr[2] = 0x4 << 4;
 
-                            mrr_send_radio_data(0);
+                        mrr_send_radio_data(0);
 
-                            // send data
-                            if(++radio_beacon_counter >= 6) { // FIXME: change to 6
-                                radio_beacon_counter = 0;
-                                int i;
-				mbus_write_message32(0xB0, mem_light_len);
-				for(i = 0; i < mem_temp_len; i += 2) {
-                                    reset_radio_data_arr();
-                                    set_halt_until_mbus_trx();
-                                    mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (mem_temp_addr + i), PRE_ADDR, radio_data_arr, 1);
-                                    set_halt_until_mbus_tx();
-				    radio_data_arr[2] &= 0x0000FFFF;
+                        // send data
+                        if(++radio_beacon_counter >= 6) { // FIXME: change to 6
+                            radio_beacon_counter = 0;
+                            int i;
+    			// mbus_write_message32(0xB0, mem_light_len);
+    			for(i = 0; i < mem_temp_len; i += 2) {
+                                reset_radio_data_arr();
+                                set_halt_until_mbus_trx();
+                                mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (mem_temp_addr + i), PRE_ADDR, radio_data_arr, 1);
+                                set_halt_until_mbus_tx();
+    			    radio_data_arr[2] &= 0x0000FFFF;
 
-                                    mrr_send_radio_data(0);
-				}
+                                mrr_send_radio_data(0);
+    			}
 
-				mbus_write_message32(0xB1, mem_temp_len);
-                                for(i = 0; i < mem_temp_len; i += 3) {
-                                    reset_radio_data_arr();
-                                    set_halt_until_mbus_trx();
-                                    mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (mem_temp_len + i), PRE_ADDR, radio_data_arr, 1);
-                                    set_halt_until_mbus_tx();
-				    radio_data_arr[2] |= 0x4 << 4;
+    			// mbus_write_message32(0xB1, mem_temp_len);
+                            for(i = 0; i < mem_temp_len; i += 3) {
+                                reset_radio_data_arr();
+                                set_halt_until_mbus_trx();
+                                mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (mem_temp_len + i), PRE_ADDR, radio_data_arr, 1);
+                                set_halt_until_mbus_tx();
+    			    radio_data_arr[2] |= 0x4 << 4;
 
-                                    mrr_send_radio_data(0);
-                                }
-
+                                mrr_send_radio_data(0);
                             }
 
-                            radio_data_arr[0] = radio_counter;
-                            radio_data_arr[1] = radio_beacon_counter;
-                            radio_data_arr[2] = 0x4 << 4;
-
-                            mrr_send_radio_data(1);
-
-                            radio_counter++;
                         }
 
-                        set_next_time(SEND_RAD, 600);
+                        radio_data_arr[0] = radio_counter;
+                        radio_data_arr[1] = radio_beacon_counter;
+                        radio_data_arr[2] = 0x4 << 4;
+
+                        mrr_send_radio_data(1);
+
+                        radio_counter++;
                     }
+
+                    set_next_time(SEND_RAD, 600);
                 }
             }
         }
-    } while(sys_run_continuous);
+    // }
 
-    // if time to next LNT_STORE time is less than 450 seconds, use that time,
+    // mbus_write_message32(0xE0, xot_timer_list[STORE_LNT]);
+    // mbus_write_message32(0xE1, xot_timer_list[STORE_SNT]);
+    // mbus_write_message32(0xE2, xot_timer_list[SEND_RAD]); // if time to next LNT_STORE time is less than 450 seconds, use that time,
     // else, use 450 seconds
+    update_system_time();
     uint32_t end_time = 0;
     if(xot_timer_list[SEND_RAD] != 0 && xot_timer_list[SEND_RAD] != 0xFFFFFFFF) {
         end_time = xot_timer_list[SEND_RAD];
     }
     else {
-        if(xot_timer_list[STORE_LNT] - xot_last_timer_list[STORE_LNT] < SNT_TEMP_UPDATE_TIME) {
+        if(xot_timer_list[STORE_LNT] != 0 
+	   && xot_timer_list[STORE_LNT] - xot_last_timer_list[STORE_LNT] < SNT_TEMP_UPDATE_TIME) {
+	    // mbus_write_message32(0xBB, 0xBBBBB1);
             end_time = xot_timer_list[STORE_LNT];
             lnt_counter_base = lnt_meas_time_mode;
         }
         else {
+	    // mbus_write_message32(0xBB, 0xBBBBB2);
             end_time = xot_last_timer_list[STORE_LNT] + SNT_TEMP_UPDATE_TIME;
             lnt_counter_base = 8;
         }
@@ -2064,12 +2136,15 @@ int main() {
 
     uint8_t i;
     for(i = 0; i < XOT_TIMER_LIST_LEN; i++) {
-        if(xot_timer_list[i] != 0 && xot_timer_list[i] <= end_time) {
+	uint32_t diff = xot_timer_list[i] - xo_sys_time_in_sec;
+	// mbus_write_message32(0xB0 + i, diff);
+        if(xot_timer_list[i] != 0 && diff <= end_time - xo_sys_time_in_sec) {
             xot_last_timer_list[i] = xot_timer_list[i];
             xot_timer_list[i] = 0xFFFFFFFF;
         }
     }
 
+    // mbus_write_message32(0xBD, xot_timer_list[STORE_LNT]);
     set_lnt_timer(end_time);
 
     pmu_setting_temp_based(2);

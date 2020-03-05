@@ -357,9 +357,9 @@ static uint8_t temp_shift_left_store(uint32_t data, uint8_t len) {
 static void store_temp() {
     if(temp_storage_remainder < TEMP_MAX_REMAINDER) {
         temp_code_storage[2] = /*(0 << 15) |*/ (temp_packet_num << 12) | (CHIP_ID << 8) | ((xo_day_time_in_sec >> 9) & 0xFF);
-        temp_code_storage[1] |= ((xo_day_time_in_sec >> 6) & 0x7);
+        temp_code_storage[1] |= ((xo_day_time_in_sec >> 6) & 0x7) << 29;
         mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) (mem_temp_addr + mem_temp_len), (uint32_t*) temp_code_storage, 2);
-        temp_packet_num = (temp_packet_num + 1) % 3;
+        temp_packet_num = (temp_packet_num + 1) % 8;
         mem_temp_len += 3;
     }
 }
@@ -372,7 +372,7 @@ static void compress_temp() {
         temp_code_storage[0] = 0;
     }
 
-    uint8_t log_temp = (log2(snt_sys_temp_code) & 0b1111100000) >> 5; // Take only the decimal value
+    uint8_t log_temp = (log2(snt_sys_temp_code + 1) & 0b1111100000) >> 5; // Take only the decimal value
 
     temp_shift_left_store(log_temp, 5);
     if(temp_storage_remainder < 5) {
@@ -483,6 +483,9 @@ uint8_t compress_light() {
         if(cur_len_mode != 0xFF) {
             if(len_mode < cur_len_mode) {
                 reduce_len_counter++;
+            }
+            else {
+                return reduce_len_counter = 0;
             }
 
             // check if need to commit L2 header

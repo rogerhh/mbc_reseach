@@ -31,6 +31,9 @@
  *  Fix read out load mem length
  *  Fix temp time shift
  *  Fix light time storage. Now will store the time the ref data is taken
+ *  Fix temp time storage. Now will store the time the ref data is taken
+ *  Fix pmu read_bat_data to be only 8 bits 
+ *  Fix temp data variable resolution. Now uses log2 - offset
  ******************************************************************************************/
 
 #include "../include/PREv20.h"
@@ -426,11 +429,14 @@ static void temp_shift_left_store(uint32_t data, uint8_t len) {
     // print_temp_compress();
 }
 
+uint16_t light_last_ref_time = 0;
+uint16_t temp_last_ref_time = 0;
+
 static void store_temp() {
     if(temp_storage_remainder < TEMP_MAX_REMAINDER) {
 	// print_temp_compress();
-        temp_code_storage[2] = /*(0 << 15) |*/ (temp_packet_num << 12) | (CHIP_ID << 8) | ((xo_day_time_in_sec >> 9) & 0xFF);
-        temp_code_storage[1] |= ((xo_day_time_in_sec >> 6) & 0x7) << 29;
+        temp_code_storage[2] = /*(0 << 15) |*/ (temp_packet_num << 12) | (CHIP_ID << 8) | ((temp_last_ref_time >> 3) & 0xFF);
+        temp_code_storage[1] |= (temp_last_ref_time & 0x7) << 29;
         mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) (MEM_TEMP_ADDR + mem_temp_len), (uint32_t*) temp_code_storage, 2);
         temp_packet_num = (temp_packet_num + 1) & 7;
         mem_temp_len += 12; // 3 * 4 B
@@ -439,6 +445,8 @@ static void store_temp() {
     }
 }
 
+#define TEMP_RES 7
+
 static void compress_temp() {
     
     if(temp_storage_remainder == TEMP_MAX_REMAINDER) {
@@ -446,11 +454,14 @@ static void compress_temp() {
         temp_code_storage[0] = 0;
     }
 
-    uint8_t log_temp = (log2(snt_sys_temp_code) & 0b1111100000) >> 5; // Take only the decimal value
+    uint8_t log_temp = log2(snt_sys_temp_code) >> (8 - TEMP_RES); // Take 3 bits above decimal point
+    mbus_write_message32(0xB5, log_temp);
 
-    // mbus_write_message32(0xB5, log_temp);
-    temp_shift_left_store(log_temp, 5);
-    if(temp_storage_remainder < 5) {
+    log_temp = (log_temp & ((1 << TEMP_RES) - 1)) - (8 << (TEMP_RES - 3));	// Subtract offset
+
+    temp_shift_left_store(log_temp, TEMP_RES);
+    temp_last_ref_time = (xo_day_time_in_sec >> 6) * 0x7FF;
+    if(temp_storage_remainder < TEMP_RES) {
         store_temp();
         temp_storage_remainder = TEMP_MAX_REMAINDER;
     }
@@ -503,7 +514,6 @@ static void store_l2_header() {
     lnt_l2_len = 0;
 }
 
-uint16_t light_last_ref_time = 0;
 
 static void store_light() {
     if(light_storage_remainder < LIGHT_MAX_REMAINDER) {
@@ -1375,7 +1385,7 @@ static void pmu_adc_read_latest() {
     // PMU register read is handled differently
     pmu_reg_write(0x00, 0x03);
     // Updated for pmuv9
-    read_data_batadc = *REG0 & 0xFFFF;
+    read_data_batadc = *REG0 & 0xFF;	// TODO: check if only need low 8 bits
 }
 
 static void pmu_enable_4V_harvesting() {
@@ -2146,7 +2156,7 @@ int main() {
 
                     // set_next_time(STORE_SNT, SNT_TEMP_UPDATE_TIME);
                     set_next_time(STORE_SNT, LNT_INTERVAL[2]);
-                    mbus_write_message32(0xEA, xot_timer_list[STORE_SNT]);
+                    // mbus_write_message32(0xEA, xot_timer_list[STORE_SNT]);
                 }
 
                 if(xot_timer_list[STORE_LNT] == 0xFFFFFFFF) {
@@ -2156,7 +2166,7 @@ int main() {
 
     	            uint16_t interval = update_light_interval();
 	            set_next_time(STORE_LNT, interval);
-    	            mbus_write_message32(0xEB, xot_timer_list[STORE_LNT]);
+    	            // mbus_write_message32(0xEB, xot_timer_list[STORE_LNT]);
                 }
 	    }
 
@@ -2180,7 +2190,7 @@ int main() {
                         mrr_send_radio_data(0);
 
                         reset_radio_data_arr();
-                        radio_data_arr[0] = (0xDD << 24) | ((radio_counter & 0xFF) << 16) | (read_data_batadc & 0xFFFF);
+                        radio_data_arr[0] = (0xDD << 24) | ((radio_counter & 0xFF) << 16) | (read_data_batadc & 0xFF);
                         radio_data_arr[1] = snt_sys_temp_code;
                         radio_data_arr[2] = 0x4 << 4;
 
@@ -2235,7 +2245,6 @@ int main() {
         }
     }
 
-    mbus_write_message32(0xBD, xot_last_timer_list[STORE_LNT]);
     set_lnt_timer(end_time);
 
     pmu_setting_temp_based(2);

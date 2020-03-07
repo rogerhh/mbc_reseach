@@ -175,7 +175,7 @@ const uint32_t LNT_TIME_THRESH[12] = {27309, 30040, 32771, 43694, 46425, 49156,
 				      90120, 92851, 95582, 106505, 109236, 111967};
 volatile uint64_t lnt_sys_light = 0;
 
-#define MRR_SIGNAL_PERIOD   1820     // 10 minutes
+#define MRR_SIGNAL_PERIOD   910     // 10 minutes
 #define MRR_TEMP_THRESH     0x258	
 uint8_t mrr_send_enable = 1;
 

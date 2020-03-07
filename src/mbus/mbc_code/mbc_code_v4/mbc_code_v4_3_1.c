@@ -38,6 +38,14 @@
  *  Fix temp_shift_left_store masking bug
  *  Fix temp_last_ref_time shifting bug
  *  Added compact beacon
+ *  Fix light len mode change reduction
+ *  Fix light len mode bug
+ *  Set start time to a start_hour_in_sec
+ *  Set safe sleep mode to 10C setting
+ *  Set radio signal to safe sleep mode
+ *  MRR_SIGNAL_PERIOD is set to 10 minutes
+ *  Remove check for mrr_send_enable in mrr_send_data
+ *  Remove check for GOC spurious wakeups
  *
  ******************************************************************************************/
 
@@ -167,7 +175,7 @@ const uint32_t LNT_TIME_THRESH[12] = {27309, 30040, 32771, 43694, 46425, 49156,
 				      90120, 92851, 95582, 106505, 109236, 111967};
 volatile uint64_t lnt_sys_light = 0;
 
-#define MRR_SIGNAL_PERIOD   910     // 5 minutes
+#define MRR_SIGNAL_PERIOD   1820     // 10 minutes
 #define MRR_TEMP_THRESH     0x258	
 uint8_t mrr_send_enable = 1;
 
@@ -460,7 +468,7 @@ static void compress_temp() {
     }
 
     // Take 3 bits above decimal point and 4 bits under
-    uint8_t log_temp = (log2(snt_sys_temp_code) >> (8 - TEMP_RES)) & ((1 << TEMP_RES) - 1); 
+    uint8_t log_temp = log2(snt_sys_temp_code) >> (8 - TEMP_RES); 
     // mbus_write_message32(0xB5, log_temp);
 
     temp_shift_left_store(log_temp, TEMP_RES);
@@ -479,10 +487,10 @@ static void compress_temp() {
 // }
 
 static void light_left_shift_store(uint32_t data, uint8_t len) {
-    data &= ((1 << len) - 1);
+    // data &= ((1 << len) - 1);
     // mbus_write_message32(0xA6, data);
     // mbus_write_message32(0xA7, len);
-    // data &= (right_shift(1, -len) - 1);
+    data &= (right_shift(1, -len) - 1);
 
     int8_t i;
     for(i = 5; i >= 1; i--) {
@@ -567,25 +575,21 @@ uint8_t compress_light() {
 	reduce_len_counter = 0;
     }
     else {
+	static const uint8_t len[4] = {4, 6, 9, 11};
         int16_t diff = last_log_light - log_light;
-        uint8_t len = 0;
         uint8_t len_mode = 0;
 	// mbus_write_message32(0xA4, diff);
         if(diff <= 7 && diff >= -8) { // 4 bit storage
-            len = 4;
             len_mode = 0;
         }
         else if(diff <= 31 && diff >= -32) {  // 6 bit storage
-            len = 6;
             len_mode = 1;
         }
         else if(diff <= 255 && diff >= -256) {    // 9 bit storage
-            len = 9;
             len_mode = 2;
         }
         else {  // just store raw data
             diff = log_light;
-            len = 11;
             len_mode = 3;
         }
 
@@ -603,12 +607,15 @@ uint8_t compress_light() {
             // check if need to commit L2 header
             if(len_mode > cur_len_mode 
 		|| reduce_len_counter >= 3 
-		//|| lnt_l2_len >= ((1 << (6 - cur_len_mode)) - 1)) {
+		// || lnt_l2_len >= ((1 << (6 - cur_len_mode)) - 1)) {
 		|| lnt_l2_len >= (right_shift(1, -6 + cur_len_mode) - 1)) {
                 store_l2_header();
+		cur_len_mode = len_mode;
             }
         }
-        cur_len_mode = len_mode;
+	else {
+            cur_len_mode = len_mode;
+	}
 
         // check if need to commit L1 header
         if(lnt_meas_time_mode != l1_cur_meas_time_mode || lnt_l1_len >= ((1 << 3) - 1)) {
@@ -617,7 +624,7 @@ uint8_t compress_light() {
         }
         l1_cur_meas_time_mode = lnt_meas_time_mode;
 
-        uint8_t needed_len = 2 + 3 + 2 + 6 - len_mode + len;
+        uint8_t needed_len = 2 + 3 + 2 + 6 - cur_len_mode + len[cur_len_mode];
 
         if(light_storage_remainder < needed_len) {
             store_light();
@@ -626,7 +633,7 @@ uint8_t compress_light() {
         }
 
 	light_last_ref_time = (xo_day_time_in_sec >> 6) & 0x7FF;
-        light_left_shift_store(diff, len);
+        light_left_shift_store(diff, len[cur_len_mode]);
         lnt_l2_len++;
     }
     last_log_light = log_light;
@@ -1297,6 +1304,12 @@ static void pmu_setting_temp_based(uint8_t mode) {
     return;
 }
 
+// safe sleep mode
+static void pmu_set_sleep_low() {
+    pmu_set_sleep_clk(PMU_SLEEP_SETTINGS[2]);
+    pmu_set_sar_conversion_ratio(PMU_SLEEP_SAR_SETTINGS[2]);
+}
+
 static void pmu_set_clk_init() {
     pmu_setting_temp_based(0);
 }
@@ -1583,9 +1596,9 @@ static void mrr_send_radio_data(uint8_t last_packet) {
     // MRR REG_F: DATA[71:48]
     // MRR REG_10: DATA[95:72]
 
-    if(!mrr_send_enable) {
-        return;
-    }
+    // if(!mrr_send_enable) {
+    //     return;
+    // }
 	    
 #ifndef USE_RAD
     mbus_write_message32(0xAA, 0xAAAAAAAA);
@@ -1722,7 +1735,7 @@ static inline void mrr_init() {
 
     //mrr_freq_hopping = 5;
     //mrr_freq_hopping_step = 4;
-    mrr_freq_hopping = 5;
+    mrr_freq_hopping = 2;
     mrr_freq_hopping_step = 4; // determining center freq
 
     mrr_cfo_val_fine_min = 0x0000;
@@ -1740,7 +1753,7 @@ static inline void mrr_init() {
     mbus_remote_register_write(MRR_ADDR,0x07,mrrv7_r07.as_int);
 
     // TX Setup Carrier Freq
-    mrrv7_r00.MRR_TRX_CAP_ANTP_TUNE_COARSE = 0x007;  //ANT CAP 10b unary 830.5 MHz // FIXME: adjust per stack
+    mrrv7_r00.MRR_TRX_CAP_ANTP_TUNE_COARSE = 0x007;  //ANT CAP 10b unary 830.5 MHz // FIXME: adjust per stack	// TODO: make them the same variable
     mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
     mrrv7_r01.MRR_TRX_CAP_ANTN_TUNE_COARSE = 0x007; //ANT CAP 10b unary 830.5 MHz
     mrrv7_r01.MRR_TRX_CAP_ANTP_TUNE_FINE = mrr_cfo_val_fine_min;  //ANT CAP 14b unary 830.5 MHz
@@ -1971,7 +1984,7 @@ void radio_full_data() {
 	set_halt_until_mbus_trx();
 	mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (MEM_LIGHT_ADDR + i), PRE_ADDR, radio_data_arr, 2);
 	set_halt_until_mbus_tx();
-	radio_data_arr[2] &= 0x0000FFFF;
+	// radio_data_arr[2] &= 0x0000FFFF;
 
 	mrr_send_radio_data(0);
     }
@@ -1982,7 +1995,7 @@ void radio_full_data() {
 	set_halt_until_mbus_trx();
 	mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (MEM_TEMP_ADDR + i), PRE_ADDR, radio_data_arr, 2);
 	set_halt_until_mbus_tx();
-	radio_data_arr[2] &= 0x0000FFFF;
+	// radio_data_arr[2] &= 0x0000FFFF;
 
 	mrr_send_radio_data((i + 12 >= mem_temp_len));
     }
@@ -2023,9 +2036,9 @@ int main() {
 
     // check wakeup is due to GOC
     if(*SREG_WAKEUP_SOURCE & 1) {
-        if(!(*GOC_DATA_IRQ)) {
-            operation_sleep(); // Need to protect against spurious wakeups
-        }
+        // if(!(*GOC_DATA_IRQ)) {
+        //     operation_sleep(); // Need to protect against spurious wakeups
+        // }
         set_goc_cmd();
         reset_timers_list();
     }
@@ -2064,24 +2077,27 @@ int main() {
 
     // }
     // else if(goc_component == 0x04) {
-    uint8_t cmd = (goc_data_full >> 31) & 1;
     
-    if(!cmd) {
-	cmd = (goc_data_full >> 29) & 0x3;
-	if(cmd == 1) {
-	    // check mrr enable
-	    if(mrr_send_enable) {
-		pmu_setting_temp_based(1);
-		radio_full_data();
-		pmu_setting_temp_based(0);
-	    }
-	}
-	else if(cmd == 2) {
-            *TIMERWD_GO = TIMER32_VAL; // Turn on CPU watchdog 	// FIXME: figure out a longer value
+    if(!(goc_data_full & 0x80000000)) {
+	uint8_t cmd = goc_data_full & 0x3;
+	if(cmd == 2) {
+            *TIMERWD_GO = 0x1; // Turn on CPU watchdog 	// FIXME: figure out a longer value
 	    while(1);
 	}
-	// safe sleep mode
-	pmu_setting_temp_based(2);
+	pmu_setting_temp_based(1);
+	if(cmd == 1 && mrr_send_enable) {
+	    radio_full_data();
+	}
+	else {
+	    radio_data_arr[2] = CHIP_ID << 4;
+	    radio_data_arr[1] = snt_sys_temp_code;
+	    radio_data_arr[0] = read_data_batadc;
+	    mrr_send_radio_data(1);
+	}
+	pmu_setting_temp_based(0);
+
+	// safe sleep mode // manually set_temp_to_some_value
+	pmu_set_sleep_low();
 	operation_sleep();
     }
     else {
@@ -2120,7 +2136,7 @@ int main() {
 
             radio_data_arr[0] = xo_day_time_in_sec;
             radio_data_arr[1] = snt_op_max_count;
-            radio_data_arr[2] = 0x04 << 4;
+            radio_data_arr[2] = CHIP_ID << 4;
             if(mrr_send_enable) {
                 pmu_setting_temp_based(1);
                 mrr_send_radio_data(1);
@@ -2129,10 +2145,12 @@ int main() {
         }
 	else if(goc_state == STATE_START) {
 	    goc_state = STATE_COLLECT;
-            xot_timer_list[STORE_LNT] = xo_sys_time_in_sec + update_light_interval();
-            xot_timer_list[STORE_SNT] = xo_sys_time_in_sec + LNT_INTERVAL[2];
-            xot_last_timer_list[STORE_LNT] = xo_sys_time_in_sec;
-            xot_last_timer_list[STORE_SNT] = xo_sys_time_in_sec;
+            xot_last_timer_list[STORE_LNT] = xot_last_timer_list[SEND_RAD];
+            xot_last_timer_list[STORE_SNT] = xot_last_timer_list[SEND_RAD];
+            // xot_timer_list[STORE_LNT] = xo_sys_time_in_sec + update_light_interval();
+            // xot_timer_list[STORE_SNT] = xo_sys_time_in_sec + LNT_INTERVAL[2];
+	    set_next_time(STORE_LNT, update_light_interval());
+	    set_next_time(STORE_SNT, LNT_INTERVAL[2]);
             xot_timer_list[SEND_RAD] = 0;
 	}
         else if(goc_state == STATE_COLLECT) {
@@ -2142,15 +2160,14 @@ int main() {
                     goc_state = STATE_RADIO;
 		}
 		else {
-	            goc_state = STATE_WAIT;
+		    pmu_set_sleep_low();
+	            operation_sleep();
 		}
                 reset_timers_list();
                 store_temp();       // store everything in temp_code_storage
                 store_light();
                 update_system_time();
-		// FIXME: change this back
                 xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + MRR_SIGNAL_PERIOD;
-                // xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + LNT_INTERVAL[0]; // FIXME: remove this
             }
     	    // mbus_write_message32(0xAA, xot_timer_list[STORE_LNT]);
 	    else {
@@ -2209,9 +2226,6 @@ int main() {
                 set_next_time(SEND_RAD, MRR_SIGNAL_PERIOD);
             }
         }
-	else if(goc_state == STATE_WAIT) {
-	    // low power sleep
-	}
     }
     // }
 

@@ -46,6 +46,7 @@
  *  MRR_SIGNAL_PERIOD is set to 10 minutes
  *  Remove check for mrr_send_enable in mrr_send_data
  *  Remove check for GOC spurious wakeups
+ *  Added SNT timer init delays back
  *
  ******************************************************************************************/
 
@@ -56,7 +57,7 @@
 #include "../include/LNTv1A_RF.h"
 #include "../include/MRRv7_RF.h"
 #include "../include/mbus.h"
-#include "../include/MBC_params_0.h"
+#include "../include/MBC_params_7.h"
 
 #define PRE_ADDR 0x1
 #define MRR_ADDR 0x2
@@ -763,20 +764,20 @@ static inline void snt_clk_init() {
     sntv4_r08.TMR_ISOLATE = 0;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
 
-    // delay(10000);
+    delay(10000);
 
     sntv4_r09.TMR_SELF_EN = 0;
     mbus_remote_register_write(SNT_ADDR, 0x9, sntv4_r09.as_int);
 
     sntv4_r08.TMR_EN_OSC = 1;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    // delay(10000);
+    delay(10000);
 
     sntv4_r08.TMR_RESETB = 1;
     sntv4_r08.TMR_RESETB_DIV = 1;
     sntv4_r08.TMR_RESETB_DCDC = 1;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    // delay(10000);	// need to wait for clock to stabilize
+    delay(10000);	// need to wait for clock to stabilize
 
     sntv4_r08.TMR_EN_SELF_CLK = 1;
     sntv4_r09.TMR_SELF_EN = 1;
@@ -786,7 +787,7 @@ static inline void snt_clk_init() {
 
     sntv4_r08.TMR_EN_OSC = 0;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    // delay(10000);
+    delay(10000);
 
     // sntv4_r19.WUP_THRESHOLD_EXT = 0;
     // sntv4_r1A.WUP_THRESHOLD = 0;
@@ -984,7 +985,8 @@ static void set_lnt_timer(uint32_t end_time) {
     projected_end_time = end_time << XO_TO_SEC_SHIFT;
 
     if(end_time <= xo_sys_time_in_sec) {
-        sys_err(0x0);	// FIXME: remove this error message. Would rather have timing off than crash
+        // sys_err(0x0);	// FIXME: remove this error message. Would rather have timing off than crash
+	end_time = xo_sys_time_in_sec + 20;
     }
 
     uint64_t temp = (projected_end_time - xo_sys_time) * lnt_snt_mplier;
@@ -2135,7 +2137,7 @@ int main() {
             radio_counter = 0;
 
             radio_data_arr[0] = xo_day_time_in_sec;
-            radio_data_arr[1] = snt_op_max_count;
+            radio_data_arr[1] = xo_sys_time_in_sec;
             radio_data_arr[2] = CHIP_ID << 4;
             if(mrr_send_enable) {
                 pmu_setting_temp_based(1);

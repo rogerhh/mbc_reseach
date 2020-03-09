@@ -47,6 +47,8 @@
  *  Remove check for mrr_send_enable in mrr_send_data
  *  Remove check for GOC spurious wakeups
  *  Added SNT timer init delays back
+ *  Change Beacon format
+ *  Added radio delay between packets
  *
  ******************************************************************************************/
 
@@ -57,8 +59,8 @@
 #include "../include/LNTv1A_RF.h"
 #include "../include/MRRv7_RF.h"
 #include "../include/mbus.h"
-// #include "../include/MBC_params_14.h"
-#include "../include/MBC_params_7.h"
+#include "../include/MBC_params_14.h"
+// #include "../include/MBC_params_7.h"
 // #include "../include/MBC_params_22.h"
 
 #define PRE_ADDR 0x1
@@ -1685,9 +1687,7 @@ static void mrr_send_radio_data(uint8_t last_packet) {
 	mbus_remote_register_write(MRR_ADDR,0x01,mrrv7_r01.as_int);
 	send_radio_data_mrr_sub1();
 	count++;
-	if (count < num_packets){
-		delay(RADIO_PACKET_DELAY);
-	}
+	delay(RADIO_PACKET_DELAY);
 	mrr_cfo_val_fine = mrr_cfo_val_fine + mrr_freq_hopping_step; // 1: 0.8MHz, 2: 1.6MHz step
     }
 
@@ -2109,7 +2109,7 @@ int main() {
 	    radio_full_data();
 	}
 	else {
-	    radio_data_arr[2] = CHIP_ID << 4;
+	    radio_data_arr[2] = CHIP_ID << 8;
 	    radio_data_arr[1] = (mem_light_len << 24) | (mem_temp_len << 16) | xo_sys_time_in_sec;
 	    radio_data_arr[0] = (snt_sys_temp_code << 12) | read_data_batadc;
 	    mrr_send_radio_data(1);
@@ -2158,7 +2158,7 @@ int main() {
 
             radio_data_arr[0] = xot_timer_list[SEND_RAD];
             radio_data_arr[1] = xo_sys_time_in_sec;
-            radio_data_arr[2] = CHIP_ID << 4;
+            radio_data_arr[2] = CHIP_ID << 8;
 	    send_beacon();
 	}
 	else if(goc_state == STATE_VERIFY) {
@@ -2173,7 +2173,7 @@ int main() {
 
             radio_data_arr[0] = xot_timer_list[SEND_RAD];
 	    radio_data_arr[1] = xo_sys_time_in_sec;
-	    radio_data_arr[2] = CHIP_ID << 4;
+	    radio_data_arr[2] = CHIP_ID << 8;
 	    send_beacon();
 	}
 	else if(goc_state == STATE_START) {
@@ -2244,9 +2244,9 @@ int main() {
 		    else {
                         // send beacon
 			// If bottom bits are all 1s, then it must be beacon
-			radio_data_arr[2] = (radio_beacon_counter) << 8 | (CHIP_ID << 4) | radio_counter;
+			radio_data_arr[2] = CHIP_ID << 8;
 			radio_data_arr[1] = (read_data_batadc << 24) | snt_sys_temp_code;
-			radio_data_arr[0] = (xo_day_time_in_sec << 11) | 0x7FF;
+			radio_data_arr[0] = (radio_beacon_counter << 28) | (radio_counter << 20) | (xo_day_time_in_sec << 11) | 0x7FF;
 
                         mrr_send_radio_data(1);
 		    }

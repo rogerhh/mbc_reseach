@@ -57,7 +57,9 @@
 #include "../include/LNTv1A_RF.h"
 #include "../include/MRRv7_RF.h"
 #include "../include/mbus.h"
+// #include "../include/MBC_params_14.h"
 #include "../include/MBC_params_7.h"
+// #include "../include/MBC_params_22.h"
 
 #define PRE_ADDR 0x1
 #define MRR_ADDR 0x2
@@ -149,6 +151,7 @@ volatile uint32_t goc_data_full;
 volatile uint32_t xo_sys_time = 0;
 volatile uint32_t xo_sys_time_in_sec = 0;
 volatile uint32_t xo_day_time_in_sec = 0;
+volatile uint32_t start_hour_in_sec = 0;
 volatile uint8_t snt_op_max_count = 176;
 
 #define XOT_TIMER_LIST_LEN 3
@@ -293,7 +296,7 @@ void update_system_time() {
 
     // mbus_write_message32(0xC2, xo_sys_time);
     // mbus_write_message32(0xC1, xo_sys_time_in_sec);
-    mbus_write_message32(0xC0, xo_day_time_in_sec);
+    // mbus_write_message32(0xC0, xo_day_time_in_sec);
 }
 
 bool xo_check_is_day() {
@@ -561,7 +564,7 @@ static void store_light() {
 
 uint8_t compress_light() {
     uint16_t log_light = log2(lnt_sys_light + 1) & 0x3FF;   // remember to subtract 1 when parsing
-    mbus_write_message32(0xA5, log_light);
+    // mbus_write_message32(0xA5, log_light);
     if(light_storage_remainder == LIGHT_MAX_REMAINDER) {
         uint8_t i;
         for(i = 0; i < 6; i++) {
@@ -981,7 +984,7 @@ static void update_lnt_timer() {
 }
 
 static void set_lnt_timer(uint32_t end_time) {
-    mbus_write_message32(0xCE, end_time);
+    // mbus_write_message32(0xCE, end_time);
     projected_end_time = end_time << XO_TO_SEC_SHIFT;
 
     if(end_time <= xo_sys_time_in_sec) {
@@ -1904,7 +1907,7 @@ static void operation_sleep( void ) {
 
 static void sys_err(uint32_t code)
 {
-    mbus_write_message32(0xAF, code);
+    // mbus_write_message32(0xAF, code);
     operation_sleep();
     // operation_sleep_notimer();
 }
@@ -1980,7 +1983,7 @@ void handler_ext_int_reg3( void ) { // REG3
 
 void radio_full_data() {
     uint16_t i;
-    mbus_write_message32(0xB0, mem_light_len);
+    // mbus_write_message32(0xB0, mem_light_len);
     for(i = 0; i < mem_light_len; i += 12) {
 	reset_radio_data_arr();
 	set_halt_until_mbus_trx();
@@ -1991,7 +1994,7 @@ void radio_full_data() {
 	mrr_send_radio_data(0);
     }
 
-    mbus_write_message32(0xB1, mem_temp_len);
+    // mbus_write_message32(0xB1, mem_temp_len);
     for(i = 0; i < mem_temp_len; i += 12) {
 	reset_radio_data_arr();
 	set_halt_until_mbus_trx();
@@ -2004,16 +2007,31 @@ void radio_full_data() {
 }
 
 uint8_t set_send_enable() {
+#ifdef USE_GMB
+    return 1;
+#endif
+
     if(snt_sys_temp_code < PMU_TEMP_THRESH[1] || snt_sys_temp_code >= PMU_55C) {
     	return 0;
     }
     uint8_t i;
     for(i = 2; i < 6; i++) {
     	if(snt_sys_temp_code < PMU_TEMP_THRESH[i]) {
-	    return read_data_batadc <= PMU_ADC_THRESH[i - 2];
+	    if(read_data_batadc <= PMU_ADC_THRESH[i - 2]) {
+	    	return 1;
+	    }
+	    else {
+	    	return 0;
+	    }
 	}
     }
     return 1;
+}
+
+void send_beacon() {
+    pmu_setting_temp_based(1);
+    mrr_send_radio_data(1);
+    pmu_setting_temp_based(0);
 }
 
 int main() {
@@ -2083,17 +2101,17 @@ int main() {
     if(!(goc_data_full & 0x80000000)) {
 	uint8_t cmd = goc_data_full & 0x3;
 	if(cmd == 2) {
-            *TIMERWD_GO = 0x1; // Turn on CPU watchdog 	// FIXME: figure out a longer value
-	    while(1);
+	    while(1);	// trigger WD timer
 	}
 	pmu_setting_temp_based(1);
-	if(cmd == 1 && mrr_send_enable) {
+	if(cmd == 1) {
+	    // if force radio out, don't check voltage
 	    radio_full_data();
 	}
 	else {
 	    radio_data_arr[2] = CHIP_ID << 4;
-	    radio_data_arr[1] = snt_sys_temp_code;
-	    radio_data_arr[0] = read_data_batadc;
+	    radio_data_arr[1] = (mem_light_len << 24) | (mem_temp_len << 16) | xo_sys_time_in_sec;
+	    radio_data_arr[0] = (snt_sys_temp_code << 12) | read_data_batadc;
 	    mrr_send_radio_data(1);
 	}
 	pmu_setting_temp_based(0);
@@ -2108,9 +2126,10 @@ int main() {
 #define STATE_RADIO 2
 #define STATE_START 3
 #define STATE_WAIT 4
+#define STATE_VERIFY 5
 
         if(goc_state == STATE_INIT) {
-            goc_state = STATE_START;
+            goc_state = STATE_VERIFY;
             op_counter = 0;
 
 	    uint16_t cur_day_time_in_min = (goc_data_full >> 20) & 0x7FF;
@@ -2118,14 +2137,15 @@ int main() {
             xo_day_time_in_sec = (cur_day_time_in_min * 60 * 1553) >> XO_TO_SEC_SHIFT;
 	    // mbus_write_message32(0xD5, xo_day_time_in_sec);
 
-	    uint32_t start_hour_in_sec = (((goc_data_full >> 15) & 0x1F) * 3600 * 1553) >> XO_TO_SEC_SHIFT;
+	    start_hour_in_sec = (((goc_data_full >> 15) & 0x1F) * 3600 * 1553) >> XO_TO_SEC_SHIFT;
 	    // mbus_write_message32(0xD7, start_hour_in_sec);
 	    snt_op_max_count = (goc_data_full >> 8) & 0x7F;
 	    radio_beacon_counter = (goc_data_full >> 5) & 0x7;
 	    radio_after_done = (goc_data_full >> 4) & 1;
             
 	    // Use radio timer to override LNT and SNT timers
-            xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + start_hour_in_sec - xo_day_time_in_sec;
+            start_hour_in_sec = xo_sys_time_in_sec + start_hour_in_sec - xo_day_time_in_sec;
+	    xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + 172;
 	    // mbus_write_message32(0xD7, xot_timer_list[SEND_RAD]);
 
 	    mem_temp_len = 0;
@@ -2136,15 +2156,26 @@ int main() {
             snt_counter = 0;
             radio_counter = 0;
 
-            radio_data_arr[0] = xo_day_time_in_sec;
+            radio_data_arr[0] = xot_timer_list[SEND_RAD];
             radio_data_arr[1] = xo_sys_time_in_sec;
             radio_data_arr[2] = CHIP_ID << 4;
-            if(mrr_send_enable) {
-                pmu_setting_temp_based(1);
-                mrr_send_radio_data(1);
-                pmu_setting_temp_based(0);
-            }
-        }
+	    send_beacon();
+	}
+	else if(goc_state == STATE_VERIFY) {
+	    if(++op_counter < 4) {
+		xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + 172;
+	    }
+	    else {
+		goc_state = STATE_START;
+	    	op_counter = 0;
+		xot_timer_list[SEND_RAD] = start_hour_in_sec;
+	    }
+
+            radio_data_arr[0] = xot_timer_list[SEND_RAD];
+	    radio_data_arr[1] = xo_sys_time_in_sec;
+	    radio_data_arr[2] = CHIP_ID << 4;
+	    send_beacon();
+	}
 	else if(goc_state == STATE_START) {
 	    goc_state = STATE_COLLECT;
             xot_last_timer_list[STORE_LNT] = xot_last_timer_list[SEND_RAD];

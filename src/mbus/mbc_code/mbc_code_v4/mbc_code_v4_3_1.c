@@ -59,8 +59,8 @@
 #include "../include/LNTv1A_RF.h"
 #include "../include/MRRv7_RF.h"
 #include "../include/mbus.h"
-#include "../include/MBC_params_14.h"
-// #include "../include/MBC_params_7.h"
+// #include "../include/MBC_params_14.h"
+#include "../include/MBC_params_7.h"
 // #include "../include/MBC_params_22.h"
 
 #define PRE_ADDR 0x1
@@ -89,7 +89,7 @@
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
 
-#define RADIO_PACKET_DELAY 13000  // Amount of delay between radio packets
+#define RADIO_PACKET_DELAY 14000  // Amount of delay between radio packets
 #define RADIO_DATA_LENGTH 192
 
 // operation list
@@ -147,7 +147,6 @@ volatile uint8_t goc_state;
 // volatile uint16_t goc_data;
 volatile uint32_t goc_data_full;
 
-// #define SNT_OP_MAX_COUNT 13   // FIXME: change this to 133 22 hours and ten minutes
 #define XO_DAY_START 38232  // 7 am
 #define XO_DAY_END  103773   // 7 pm
 volatile uint32_t xo_sys_time = 0;
@@ -2156,8 +2155,8 @@ int main() {
             snt_counter = 0;
             radio_counter = 0;
 
-            radio_data_arr[0] = xot_timer_list[SEND_RAD];
-            radio_data_arr[1] = xo_sys_time_in_sec;
+            radio_data_arr[0] = xo_sys_time_in_sec;
+            radio_data_arr[1] = xot_timer_list[SEND_RAD];
             radio_data_arr[2] = CHIP_ID << 8;
 	    send_beacon();
 	}

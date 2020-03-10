@@ -2155,8 +2155,8 @@ int main() {
             snt_counter = 0;
             radio_counter = 0;
 
-            radio_data_arr[0] = xo_sys_time_in_sec;
-            radio_data_arr[1] = xot_timer_list[SEND_RAD];
+            radio_data_arr[0] = xot_timer_list[SEND_RAD];
+            radio_data_arr[1] = xo_sys_time_in_sec;
             radio_data_arr[2] = CHIP_ID << 8;
 	    send_beacon();
 	}

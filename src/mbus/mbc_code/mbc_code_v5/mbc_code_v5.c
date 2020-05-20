@@ -38,10 +38,21 @@
  *  Fix temp_shift_left_store masking bug
  *  Fix temp_last_ref_time shifting bug
  *  Added compact beacon
+ *  Fix light len mode change reduction
+ *  Fix light len mode bug
+ *  Set start time to a start_hour_in_sec
+ *  Set safe sleep mode to 10C setting
+ *  Set radio signal to safe sleep mode
+ *  MRR_SIGNAL_PERIOD is set to 10 minutes
+ *  Remove check for mrr_send_enable in mrr_send_data
+ *  Remove check for GOC spurious wakeups
+ *  Added SNT timer init delays back
+ *  Change Beacon format
+ *  Added radio delay between packets
  *
- * v5: Using PREv20E
- *  Back to XO Timer
- *  Add characterization to a trigger
+ *  v5: Using PREv20E
+ *    back to xo timer
+ *    Change trigger cmd format
  *
  ******************************************************************************************/
 
@@ -53,6 +64,17 @@
 #include "../include/MRRv7_RF.h"
 #include "../include/mbus.h"
 #include "../include/MBC_params_0.h"
+// #include "../include/MBC_params_5.h"
+// #include "../include/MBC_params_7.h"
+// #include "../include/MBC_params_12.h"
+// #include "../include/MBC_params_13.h"
+// #include "../include/MBC_params_14.h"
+// #include "../include/MBC_params_16.h"
+// #include "../include/MBC_params_19.h"
+// #include "../include/MBC_params_22.h"
+// #include "../include/MBC_params_24.h"
+// #include "../include/MBC_params_28.h"
+// #include "../include/MBC_params_31.h"
 
 #define PRE_ADDR 0x1
 #define MRR_ADDR 0x2
@@ -65,7 +87,7 @@
 #define USE_MRR
 #define USE_LNT
 #define USE_SNT
-#define USE_PMU
+// #define USE_PMU
 #define USE_MEM
 #define USE_RAD
 #define USE_XO
@@ -81,7 +103,7 @@
 #define SNT_TEMP_READ   0x3
 #define SNT_SET_PMU	0x4
 
-#define RADIO_PACKET_DELAY 13000  // Amount of delay between radio packets
+#define RADIO_PACKET_DELAY 14000  // Amount of delay between radio packets
 #define RADIO_DATA_LENGTH 192
 
 // operation list
@@ -139,12 +161,12 @@ volatile uint8_t goc_state;
 // volatile uint16_t goc_data;
 volatile uint32_t goc_data_full;
 
-// #define SNT_OP_MAX_COUNT 13   // FIXME: change this to 133 22 hours and ten minutes
 #define XO_DAY_START 38232  // 7 am
 #define XO_DAY_END  103773   // 7 pm
 volatile uint32_t xo_sys_time = 0;
 volatile uint32_t xo_sys_time_in_sec = 0;
 volatile uint32_t xo_day_time_in_sec = 0;
+volatile uint32_t start_hour_in_sec = 0;
 volatile uint8_t snt_op_max_count = 176;
 
 #define XOT_TIMER_LIST_LEN 3
@@ -172,7 +194,7 @@ const uint32_t LNT_TIME_THRESH[12] = {27309, 30040, 32771, 43694, 46425, 49156,
 				      90120, 92851, 95582, 106505, 109236, 111967};
 volatile uint64_t lnt_sys_light = 0;
 
-#define MRR_SIGNAL_PERIOD   910     // 5 minutes
+#define MRR_SIGNAL_PERIOD   910     // 10 minutes
 #define MRR_TEMP_THRESH     0x258	
 uint8_t mrr_send_enable = 1;
 
@@ -265,63 +287,64 @@ static void stop_timer32_timeout_check(){
     }
 }
 
-
 void xo_init( void ) {
+    prev20e_r19_t prev20e_r19 = PREv20E_R19_DEFAULT;
+
     // Parasitic capacitance tuning (6 bits for each; each 1 adds 1.8pF)
     uint32_t xo_cap_drv = 0x3F;
     uint32_t xo_cap_in  = 0x3F;
     *REG_XO_CONF2 = ((xo_cap_drv << 6) | (xo_cap_in << 0));
 
     // XO xonfiguration
-    prev20_r19.XO_PULSE_SEL     = 0x4; // pulse with sel, 1-hot encoded
-    prev20_r19.XO_DELAY_EN      = 0x3; // pair usage together with xo_pulse_sel
-    prev20_r19.XO_DRV_START_UP  = 0x0;
-    prev20_r19.XO_DRV_CORE      = 0x0;
-    prev20_r19.XO_SCN_CLK_SEL   = 0x0;
-    prev20_r19.XO_SCN_ENB       = 0x1;
+    prev20e_r19.XO_PULSE_SEL     = 0x4; // pulse with sel, 1-hot encoded
+    prev20e_r19.XO_DELAY_EN      = 0x3; // pair usage together with xo_pulse_sel
+    prev20e_r19.XO_DRV_START_UP  = 0x0;
+    prev20e_r19.XO_DRV_CORE      = 0x0;
+    prev20e_r19.XO_SCN_CLK_SEL   = 0x0;
+    prev20e_r19.XO_SCN_ENB       = 0x1;
 
     // TODO: check if need 32.768kHz clock
-    prev20_r19.XO_EN_DIV        = 0x1; // divider enable (also enables CLK_OUT)
-    prev20_r19.XO_S             = 0x0; // (not used) division ration for 16kHz out
-    prev20_r19.XO_SEL_CP_DIV    = 0x0; // 1: 0.3v-generation charge-pump uses divided clock
-    prev20_r19.XO_EN_OUT        = 0x1; // xo output enabled;
+    prev20e_r19.XO_EN_DIV        = 0x1; // divider enable (also enables CLK_OUT)
+    prev20e_r19.XO_S             = 0x0; // (not used) division ration for 16kHz out
+    prev20e_r19.XO_SEL_CP_DIV    = 0x0; // 1: 0.3v-generation charge-pump uses divided clock
+    prev20e_r19.XO_EN_OUT        = 0x1; // xo output enabled;
     				       // Note: I think this means output to XOT
     // Pseudo-resistor selection
-    prev20_r19.XO_RP_LOW        = 0x0;
-    prev20_r19.XO_RP_MEDIA      = 0x1;
-    prev20_r19.XO_RP_MVT        = 0x0;
-    prev20_r19.XO_RP_SVT        = 0x0;
+    prev20e_r19.XO_RP_LOW        = 0x0;
+    prev20e_r19.XO_RP_MEDIA      = 0x1;
+    prev20e_r19.XO_RP_MVT        = 0x0;
+    prev20e_r19.XO_RP_SVT        = 0x0;
 
-    prev20_r19.XO_SLEEP = 0x0;
-    *REG_XO_CONF1 = prev20_r19.as_int;
+    prev20e_r19.XO_SLEEP = 0x0;
+    *REG_XO_CONF1 = prev20e_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
     delay(10000); // >= 1ms
 
-    prev20_r19.XO_ISOLATE = 0x0;
-    *REG_XO_CONF1 = prev20_r19.as_int;
+    prev20e_r19.XO_ISOLATE = 0x0;
+    *REG_XO_CONF1 = prev20e_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
     delay(10000); // >= 1ms
 
-    prev20_r19.XO_DRV_START_UP = 0x1;
-    *REG_XO_CONF1 = prev20_r19.as_int;
+    prev20e_r19.XO_DRV_START_UP = 0x1;
+    *REG_XO_CONF1 = prev20e_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
     delay(30000); // >= 1s
 
-    prev20_r19.XO_SCN_CLK_SEL = 0x1;
-    *REG_XO_CONF1 = prev20_r19.as_int;
+    prev20e_r19.XO_SCN_CLK_SEL = 0x1;
+    *REG_XO_CONF1 = prev20e_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
     delay(3000); // >= 300us
 
-    prev20_r19.XO_SCN_CLK_SEL = 0x0;
-    prev20_r19.XO_SCN_ENB     = 0x0;
-    *REG_XO_CONF1 = prev20_r19.as_int;
+    prev20e_r19.XO_SCN_CLK_SEL = 0x0;
+    prev20e_r19.XO_SCN_ENB     = 0x0;
+    *REG_XO_CONF1 = prev20e_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
     delay(30000);  // >= 1s
 
-    prev20_r19.XO_DRV_START_UP = 0x0;
-    prev20_r19.XO_DRV_CORE     = 0x1;
-    prev20_r19.XO_SCN_CLK_SEL  = 0x1;
-    *REG_XO_CONF1 = prev20_r19.as_int;
+    prev20e_r19.XO_DRV_START_UP = 0x0;
+    prev20e_r19.XO_DRV_CORE     = 0x1;
+    prev20e_r19.XO_SCN_CLK_SEL  = 0x1;
+    *REG_XO_CONF1 = prev20e_r19.as_int;
     mbus_write_message32(0xA1, *REG_XO_CONF1);
 
     enable_xo_timer();
@@ -335,22 +358,6 @@ void xo_init( void ) {
 
 inline uint32_t get_timer_cnt_xo() {
     return ((*REG_XOT_VAL_U & 0xFFFF) << 16) | (*REG_XOT_VAL_L & 0xFFFF);
-}
-
-void update_system_time() {
-    uint32_t val = xo_sys_time;
-    xo_sys_time = get_timer_cnt();
-    xo_sys_time_in_sec = xo_sys_time >> 15;
-    xo_day_time_in_sec += (xo_sys_time - val) >> 15;
-
-    if(xo_day_time_in_sec >= 86400) {
-        xo_day_time_in_sec -= 86400;
-    }
-}
-
-bool xo_check_is_day() {
-    update_system_time();
-    return xo_day_time_in_sec >= XO_DAY_START && xo_day_time_in_sec < XO_DAY_END;
 }
 
 static uint32_t get_timer_cnt() {
@@ -377,7 +384,7 @@ void update_system_time() {
 
     // mbus_write_message32(0xC2, xo_sys_time);
     // mbus_write_message32(0xC1, xo_sys_time_in_sec);
-    mbus_write_message32(0xC0, xo_day_time_in_sec);
+    // mbus_write_message32(0xC0, xo_day_time_in_sec);
 }
 
 bool xo_check_is_day() {
@@ -513,7 +520,7 @@ static void temp_shift_left_store(uint32_t data, uint8_t len) {
     // mbus_write_message32(0xB6, data);
     // mbus_write_message32(0xB7, len);
     // data &= ((1 << len) - 1);
-    data &= (right_shift(1, -len) - 1);
+    data &= right_shift(1, -len) - 1;
 
     // temp_code_storage[1] = temp_code_storage[1] << len;
     // temp_code_storage[1] |= (temp_code_storage[0] >> (32 - len));
@@ -538,6 +545,8 @@ static void store_temp() {
         mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) (MEM_TEMP_ADDR + mem_temp_len), (uint32_t*) temp_code_storage, 2);
         temp_packet_num = (temp_packet_num + 1) & 7;
         mem_temp_len += 12; // 3 * 4 B
+
+	// print_temp_compress();
     }
 }
 
@@ -551,7 +560,7 @@ static void compress_temp() {
     }
 
     // Take 3 bits above decimal point and 4 bits under
-    uint8_t log_temp = (log2(snt_sys_temp_code) >> (8 - TEMP_RES)) & ((1 << TEMP_RES) - 1); 
+    uint8_t log_temp = log2(snt_sys_temp_code) >> (8 - TEMP_RES); 
     // mbus_write_message32(0xB5, log_temp);
 
     temp_shift_left_store(log_temp, TEMP_RES);
@@ -570,10 +579,10 @@ static void compress_temp() {
 // }
 
 static void light_left_shift_store(uint32_t data, uint8_t len) {
-    data &= ((1 << len) - 1);
+    // data &= ((1 << len) - 1);
     // mbus_write_message32(0xA6, data);
     // mbus_write_message32(0xA7, len);
-    // data &= (right_shift(1, -len) - 1);
+    data &= (right_shift(1, -len) - 1);
 
     int8_t i;
     for(i = 5; i >= 1; i--) {
@@ -643,7 +652,7 @@ static void store_light() {
 
 uint8_t compress_light() {
     uint16_t log_light = log2(lnt_sys_light + 1) & 0x3FF;   // remember to subtract 1 when parsing
-    mbus_write_message32(0xA5, log_light);
+    // mbus_write_message32(0xA5, log_light);
     if(light_storage_remainder == LIGHT_MAX_REMAINDER) {
         uint8_t i;
         for(i = 0; i < 6; i++) {
@@ -658,25 +667,21 @@ uint8_t compress_light() {
 	reduce_len_counter = 0;
     }
     else {
+	static const uint8_t len[4] = {4, 6, 9, 11};
         int16_t diff = last_log_light - log_light;
-        uint8_t len = 0;
         uint8_t len_mode = 0;
 	// mbus_write_message32(0xA4, diff);
         if(diff <= 7 && diff >= -8) { // 4 bit storage
-            len = 4;
             len_mode = 0;
         }
         else if(diff <= 31 && diff >= -32) {  // 6 bit storage
-            len = 6;
             len_mode = 1;
         }
         else if(diff <= 255 && diff >= -256) {    // 9 bit storage
-            len = 9;
             len_mode = 2;
         }
         else {  // just store raw data
             diff = log_light;
-            len = 11;
             len_mode = 3;
         }
 
@@ -694,15 +699,15 @@ uint8_t compress_light() {
             // check if need to commit L2 header
             if(len_mode > cur_len_mode 
 		|| reduce_len_counter >= 3 
-		//|| lnt_l2_len >= ((1 << (6 - cur_len_mode)) - 1)) {
+		// || lnt_l2_len >= ((1 << (6 - cur_len_mode)) - 1)) {
 		|| lnt_l2_len >= (right_shift(1, -6 + cur_len_mode) - 1)) {
                 store_l2_header();
-                cur_len_mode = len_mode;
+		cur_len_mode = len_mode;
             }
         }
-        else {
+	else {
             cur_len_mode = len_mode;
-        }
+	}
 
         // check if need to commit L1 header
         if(lnt_meas_time_mode != l1_cur_meas_time_mode || lnt_l1_len >= ((1 << 3) - 1)) {
@@ -711,7 +716,7 @@ uint8_t compress_light() {
         }
         l1_cur_meas_time_mode = lnt_meas_time_mode;
 
-        uint8_t needed_len = 2 + 3 + 2 + 6 - len_mode + len;
+        uint8_t needed_len = 2 + 3 + 2 + 6 - cur_len_mode + len[cur_len_mode];
 
         if(light_storage_remainder < needed_len) {
             store_light();
@@ -720,7 +725,7 @@ uint8_t compress_light() {
         }
 
 	light_last_ref_time = (xo_day_time_in_sec >> 6) & 0x7FF;
-        light_left_shift_store(diff, len);
+        light_left_shift_store(diff, len[cur_len_mode]);
         lnt_l2_len++;
     }
     last_log_light = log_light;
@@ -850,20 +855,20 @@ static inline void snt_clk_init() {
     sntv4_r08.TMR_ISOLATE = 0;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
 
-    // delay(10000);
+    delay(10000);
 
     sntv4_r09.TMR_SELF_EN = 0;
     mbus_remote_register_write(SNT_ADDR, 0x9, sntv4_r09.as_int);
 
     sntv4_r08.TMR_EN_OSC = 1;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    // delay(10000);
+    delay(10000);
 
     sntv4_r08.TMR_RESETB = 1;
     sntv4_r08.TMR_RESETB_DIV = 1;
     sntv4_r08.TMR_RESETB_DCDC = 1;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    // delay(10000);	// need to wait for clock to stabilize
+    delay(10000);	// need to wait for clock to stabilize
 
     sntv4_r08.TMR_EN_SELF_CLK = 1;
     sntv4_r09.TMR_SELF_EN = 1;
@@ -873,7 +878,7 @@ static inline void snt_clk_init() {
 
     sntv4_r08.TMR_EN_OSC = 0;
     mbus_remote_register_write(SNT_ADDR, 0x8, sntv4_r08.as_int);
-    // delay(10000);
+    delay(10000);
 
     // sntv4_r19.WUP_THRESHOLD_EXT = 0;
     // sntv4_r1A.WUP_THRESHOLD = 0;
@@ -1067,11 +1072,12 @@ static void update_lnt_timer() {
 }
 
 static void set_lnt_timer(uint32_t end_time) {
-    mbus_write_message32(0xCE, end_time);
+    // mbus_write_message32(0xCE, end_time);
     projected_end_time = end_time << XO_TO_SEC_SHIFT;
 
     if(end_time <= xo_sys_time_in_sec) {
-        sys_err(0x0);	// FIXME: remove this error message. Would rather have timing off than crash
+        // sys_err(0x0);	// FIXME: remove this error message. Would rather have timing off than crash
+	end_time = xo_sys_time_in_sec + 20;
     }
 
     uint64_t temp = (projected_end_time - xo_sys_time) * lnt_snt_mplier;
@@ -1207,12 +1213,15 @@ uint32_t* crcEnc16()
  * PMU functions (PMUv11)
  **********************************************/
 static void pmu_reg_write(uint32_t reg_addr, uint32_t reg_data) {
+#ifdef USE_PMU
     set_halt_until_mbus_trx();
     mbus_remote_register_write(PMU_ADDR, reg_addr, reg_data);
     set_halt_until_mbus_tx();
+#endif
 }
 
 static void pmu_set_adc_period(uint32_t val) {
+#ifdef USE_PMU
     // Updated for PMUv9
     pmu_reg_write(0x3C,         // PMU_EN_CONTROLLER_DESIRED_STATE_ACTIVE
                 ((1 <<  0) |    // state_sar_scn_on
@@ -1269,9 +1278,11 @@ static void pmu_set_adc_period(uint32_t val) {
                  (1 << 18) |    // state_vdd_0p6_turned_on
                  (0 << 19) |    // state_vbat_read
                  (1 << 20)));   // state_state_horizon
+#endif
 }
 
 static void pmu_set_active_clk(uint32_t setting) {
+#ifdef USE_PMU
     uint8_t r = (setting >> 24) & 0xFF;
     uint8_t l = (setting >> 16) & 0xFF;
     uint8_t base = (setting >> 8) & 0xFF;
@@ -1315,9 +1326,11 @@ static void pmu_set_active_clk(uint32_t setting) {
                  (r <<  9) |    // frequency multiplier r
                  (l <<  5) |    // frequency multiplier l
                  (base)));      // floor frequency base (0-63)
+#endif
 }
 
 static void pmu_set_sleep_clk(uint32_t setting) {
+#ifdef USE_PMU
     uint8_t r = (setting >> 24) & 0xFF;
     uint8_t l = (setting >> 16) & 0xFF;
     uint8_t base = (setting >> 8) & 0xFF;
@@ -1348,9 +1361,11 @@ static void pmu_set_sleep_clk(uint32_t setting) {
                  (r <<  9) |    // frequency multiplier r
                  (l <<  5) |    // frequency multiplier l (actually l+1)
                  (base)));      // floor frequency base (0-63)
+#endif
 }
 
 static void pmu_set_sar_conversion_ratio(uint8_t ratio) {
+#ifdef USE_PMU
     uint8_t i;
     for(i = 0; i < 2; i++) {
 	    pmu_reg_write(0x05,         // PMU_EN_SAR_RATIO_OVERRIDE; default: 12'h000
@@ -1363,12 +1378,14 @@ static void pmu_set_sar_conversion_ratio(uint8_t ratio) {
 		     (i <<  7) |    // enable override setting [6:0] (1'h0)
 		     (ratio)));  // binary converter's conversion ratio (7'h00)
     }
+#endif
 }
 
 // 0 : normal active
 // 1 : radio active
 // 2 : sleep
 static void pmu_setting_temp_based(uint8_t mode) {
+#ifdef USE_PMU
     int8_t i;
     for(i = PMU_SETTINGS_LEN; i >= 0; i--) {
 	    // mbus_write_message32(0xB3, 0xFFFFFFFF);
@@ -1389,13 +1406,25 @@ static void pmu_setting_temp_based(uint8_t mode) {
         }
     }
     return;
+#endif
+}
+
+// safe sleep mode
+static void pmu_set_sleep_low() {
+#ifdef USE_PMU
+    pmu_set_sleep_clk(PMU_SLEEP_SETTINGS[2]);
+    pmu_set_sar_conversion_ratio(PMU_SLEEP_SAR_SETTINGS[2]);
+#endif
 }
 
 static void pmu_set_clk_init() {
+#ifdef USE_PMU
     pmu_setting_temp_based(0);
+#endif
 }
 
 static void pmu_adc_reset_setting() {
+#ifdef USE_PMU
     // PMU ADC will be automatically reset when system wakes up
     // Updated for PMUv9
     pmu_reg_write(0x3C,         // PMU_EN_CONTROLLER_DESIRED_STATE_ACTIVE
@@ -1420,9 +1449,11 @@ static void pmu_adc_reset_setting() {
                  (1 << 18) |    // state_vdd_0p6_turned_on
                  (0 << 19) |    // state_vbat_read
                  (1 << 20)));   // state_state_horizon
+#endif
 }
 
 static void pmu_adc_disable() {
+#ifdef USE_PMU
     // PMU ADC will be automatically reset when system wakes up
     // Updated for PMUv9
     pmu_reg_write(0x3B,         // PMU_EN_CONTROLLER_DESIRED_STATE_SLEEP
@@ -1447,9 +1478,11 @@ static void pmu_adc_disable() {
                  (1 << 18) |    // state_vdd_0p6_turned_on
                  (0 << 19) |    // state_vbat_read                  // Turn off for old adc
                  (1 << 20)));   // state_state_horizon
+#endif
 }
 
 static void pmu_adc_enable() {
+#ifdef USE_PMU
     // PMU ADC will be automatically reset when system wakes up
     // PMU_CONTROLLER_DESIRED_STATE sleep
     // Updated for PMUv9
@@ -1475,17 +1508,21 @@ static void pmu_adc_enable() {
                  (1 << 18) |    // state_vdd_0p6_turned_on
                  (0 << 19) |    // state_vbat_read                  // Turn of for old adc
                  (1 << 20)));   // state_state_horizon
+#endif
 }
 
 static void pmu_adc_read_latest() {
+#ifdef USE_PMU
     // Grab latest pmu adc readings 
     // PMU register read is handled differently
     pmu_reg_write(0x00, 0x03);
     // Updated for pmuv9
     read_data_batadc = *REG0 & 0xFF;	// TODO: check if only need low 8 bits
+#endif
 }
 
 static void pmu_enable_4V_harvesting() {
+#ifdef USE_PMU
     // Updated for PMUv9
     pmu_reg_write(0x0E,         // PMU_EN_VOLTAGE_CLAMP_TRIM
                 ((0 << 12) |    // 1: solar short by latched vbat_high (new); 0: follow [10] setting
@@ -1495,9 +1532,11 @@ static void pmu_enable_4V_harvesting() {
                  (0 <<  8) |    // Turn on the harvester-inhibiting switch
                  (3 <<  4) |    // clamp_tune_bottom (increases clamp thresh)
                  (0)));         // clamp_tune_top (decreases clamp thresh)
+#endif
 }
 
 static void pmu_init() {
+#ifdef USE_PMU
     pmu_set_clk_init();
     pmu_enable_4V_harvesting();
 
@@ -1520,6 +1559,7 @@ static void pmu_init() {
 
     pmu_adc_reset_setting();
     pmu_adc_enable();
+#endif
 }
 
 /**********************************************
@@ -1677,9 +1717,9 @@ static void mrr_send_radio_data(uint8_t last_packet) {
     // MRR REG_F: DATA[71:48]
     // MRR REG_10: DATA[95:72]
 
-    if(!mrr_send_enable) {
-        return;
-    }
+    // if(!mrr_send_enable) {
+    //     return;
+    // }
 	    
 #ifndef USE_RAD
     mbus_write_message32(0xAA, 0xAAAAAAAA);
@@ -1761,9 +1801,7 @@ static void mrr_send_radio_data(uint8_t last_packet) {
 	mbus_remote_register_write(MRR_ADDR,0x01,mrrv7_r01.as_int);
 	send_radio_data_mrr_sub1();
 	count++;
-	if (count < num_packets){
-		delay(RADIO_PACKET_DELAY);
-	}
+	delay(RADIO_PACKET_DELAY);
 	mrr_cfo_val_fine = mrr_cfo_val_fine + mrr_freq_hopping_step; // 1: 0.8MHz, 2: 1.6MHz step
     }
 
@@ -1816,7 +1854,7 @@ static inline void mrr_init() {
 
     //mrr_freq_hopping = 5;
     //mrr_freq_hopping_step = 4;
-    mrr_freq_hopping = 5;
+    mrr_freq_hopping = 2;
     mrr_freq_hopping_step = 4; // determining center freq
 
     mrr_cfo_val_fine_min = 0x0000;
@@ -1834,7 +1872,7 @@ static inline void mrr_init() {
     mbus_remote_register_write(MRR_ADDR,0x07,mrrv7_r07.as_int);
 
     // TX Setup Carrier Freq
-    mrrv7_r00.MRR_TRX_CAP_ANTP_TUNE_COARSE = 0x007;  //ANT CAP 10b unary 830.5 MHz // FIXME: adjust per stack
+    mrrv7_r00.MRR_TRX_CAP_ANTP_TUNE_COARSE = 0x007;  //ANT CAP 10b unary 830.5 MHz // FIXME: adjust per stack	// TODO: make them the same variable
     mbus_remote_register_write(MRR_ADDR,0x00,mrrv7_r00.as_int);
     mrrv7_r01.MRR_TRX_CAP_ANTN_TUNE_COARSE = 0x007; //ANT CAP 10b unary 830.5 MHz
     mrrv7_r01.MRR_TRX_CAP_ANTP_TUNE_FINE = mrr_cfo_val_fine_min;  //ANT CAP 14b unary 830.5 MHz
@@ -1954,7 +1992,7 @@ static void operation_init( void ) {
 
 #ifdef USE_XO
     xo_init();
-#endif 
+#endif
 }
 
 /**********************************************
@@ -1987,7 +2025,7 @@ static void operation_sleep( void ) {
 
 static void sys_err(uint32_t code)
 {
-    mbus_write_message32(0xAF, code);
+    // mbus_write_message32(0xAF, code);
     operation_sleep();
     // operation_sleep_notimer();
 }
@@ -2063,40 +2101,56 @@ void handler_ext_int_reg3( void ) { // REG3
 
 void radio_full_data() {
     uint16_t i;
-    mbus_write_message32(0xB0, mem_light_len);
+    // mbus_write_message32(0xB0, mem_light_len);
     for(i = 0; i < mem_light_len; i += 12) {
 	reset_radio_data_arr();
 	set_halt_until_mbus_trx();
 	mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (MEM_LIGHT_ADDR + i), PRE_ADDR, radio_data_arr, 2);
 	set_halt_until_mbus_tx();
-	radio_data_arr[2] &= 0x0000FFFF;
+	// radio_data_arr[2] &= 0x0000FFFF;
 
 	mrr_send_radio_data(0);
     }
 
-    mbus_write_message32(0xB1, mem_temp_len);
+    // mbus_write_message32(0xB1, mem_temp_len);
     for(i = 0; i < mem_temp_len; i += 12) {
 	reset_radio_data_arr();
 	set_halt_until_mbus_trx();
 	mbus_copy_mem_from_remote_to_any_bulk(MEM_ADDR, (uint32_t*) (MEM_TEMP_ADDR + i), PRE_ADDR, radio_data_arr, 2);
 	set_halt_until_mbus_tx();
-	radio_data_arr[2] &= 0x0000FFFF;
+	// radio_data_arr[2] &= 0x0000FFFF;
 
 	mrr_send_radio_data((i + 12 >= mem_temp_len));
     }
 }
 
 uint8_t set_send_enable() {
+#ifdef USE_GMB
+    return 1;
+#endif
+#ifndef USE_GMB
     if(snt_sys_temp_code < PMU_TEMP_THRESH[1] || snt_sys_temp_code >= PMU_55C) {
     	return 0;
     }
     uint8_t i;
     for(i = 2; i < 6; i++) {
     	if(snt_sys_temp_code < PMU_TEMP_THRESH[i]) {
-	    return read_data_batadc <= PMU_ADC_THRESH[i - 2];
+	    if(read_data_batadc <= PMU_ADC_THRESH[i - 2]) {
+	    	return 1;
+	    }
+	    else {
+	    	return 0;
+	    }
 	}
     }
     return 1;
+#endif
+}
+
+void send_beacon() {
+    pmu_setting_temp_based(1);
+    mrr_send_radio_data(1);
+    pmu_setting_temp_based(0);
 }
 
 int main() {
@@ -2121,9 +2175,9 @@ int main() {
 
     // check wakeup is due to GOC
     if(*SREG_WAKEUP_SOURCE & 1) {
-        if(!(*GOC_DATA_IRQ)) {
-            operation_sleep(); // Need to protect against spurious wakeups
-        }
+        // if(!(*GOC_DATA_IRQ)) {
+        //     operation_sleep(); // Need to protect against spurious wakeups
+        // }
         set_goc_cmd();
         reset_timers_list();
     }
@@ -2139,6 +2193,7 @@ int main() {
     //     mrr_send_enable = 0;
     // }
     mrr_send_enable = set_send_enable();
+    mrr_send_enable = true; // FIXME: remove this for non override
 
     // if(goc_component == 0x01) {
     //     op_counter++;
@@ -2162,24 +2217,32 @@ int main() {
 
     // }
     // else if(goc_component == 0x04) {
-    uint8_t cmd = (goc_data_full >> 31) & 1;
     
-    if(!cmd) {
-	cmd = (goc_data_full >> 29) & 0x3;
+    if(!(goc_data_full & 0x80000000)) {
+	uint8_t cmd = (goc_data_full >> 29) & 0x3;
+	if(cmd == 3) {
+	    mbus_write_message32(0xA5, get_timer_cnt_xo());
+	    mbus_write_message32(0xA5, get_timer_cnt_xo());
+	    mbus_write_message32(0xA5, get_timer_cnt_xo());
+	}
+	if(cmd == 2) {
+	    while(1);	// trigger WD timer
+	}
+	pmu_setting_temp_based(1);
 	if(cmd == 1) {
-	    // check mrr enable
-	    if(mrr_send_enable) {
-		pmu_setting_temp_based(1);
-		radio_full_data();
-		pmu_setting_temp_based(0);
-	    }
+	    // if force radio out, don't check voltage
+	    radio_full_data();
 	}
-	else if(cmd == 2) {
-            *TIMERWD_GO = TIMER32_VAL; // Turn on CPU watchdog 	// FIXME: figure out a longer value
-	    while(1);
+	else {
+	    radio_data_arr[2] = CHIP_ID << 8;
+	    radio_data_arr[1] = (mem_light_len << 24) | (mem_temp_len << 16) | xo_sys_time_in_sec;
+	    radio_data_arr[0] = (snt_sys_temp_code << 12) | read_data_batadc;
+	    mrr_send_radio_data(1);
 	}
-	// safe sleep mode
-	pmu_setting_temp_based(2);
+	pmu_setting_temp_based(0);
+
+	// safe sleep mode // manually set_temp_to_some_value
+	pmu_set_sleep_low();
 	operation_sleep();
     }
     else {
@@ -2188,9 +2251,10 @@ int main() {
 #define STATE_RADIO 2
 #define STATE_START 3
 #define STATE_WAIT 4
+#define STATE_VERIFY 5
 
         if(goc_state == STATE_INIT) {
-            goc_state = STATE_START;
+            goc_state = STATE_VERIFY;
             op_counter = 0;
 
 	    uint16_t cur_day_time_in_min = (goc_data_full >> 20) & 0x7FF;
@@ -2198,14 +2262,15 @@ int main() {
             xo_day_time_in_sec = (cur_day_time_in_min * 60 * 1553) >> XO_TO_SEC_SHIFT;
 	    // mbus_write_message32(0xD5, xo_day_time_in_sec);
 
-	    uint32_t start_hour_in_sec = (((goc_data_full >> 15) & 0x1F) * 3600 * 1553) >> XO_TO_SEC_SHIFT;
+	    start_hour_in_sec = (((goc_data_full >> 15) & 0x1F) * 3600 * 1553) >> XO_TO_SEC_SHIFT;
 	    // mbus_write_message32(0xD7, start_hour_in_sec);
 	    snt_op_max_count = (goc_data_full >> 8) & 0x7F;
 	    radio_beacon_counter = (goc_data_full >> 5) & 0x7;
 	    radio_after_done = (goc_data_full >> 4) & 1;
             
 	    // Use radio timer to override LNT and SNT timers
-            xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + start_hour_in_sec - xo_day_time_in_sec;
+            start_hour_in_sec = xo_sys_time_in_sec + start_hour_in_sec - xo_day_time_in_sec;
+	    xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + 172;
 	    // mbus_write_message32(0xD7, xot_timer_list[SEND_RAD]);
 
 	    mem_temp_len = 0;
@@ -2216,25 +2281,34 @@ int main() {
             snt_counter = 0;
             radio_counter = 0;
 
-            radio_data_arr[0] = xo_day_time_in_sec;
-            radio_data_arr[1] = snt_op_max_count;
-            radio_data_arr[2] = 0x04 << 4;
-            if(mrr_send_enable) {
-                pmu_setting_temp_based(1);
-                mrr_send_radio_data(1);
-                pmu_setting_temp_based(0);
-            }
-        }
+            radio_data_arr[0] = xot_timer_list[SEND_RAD];
+            radio_data_arr[1] = xo_sys_time_in_sec;
+            radio_data_arr[2] = CHIP_ID << 8;
+	    send_beacon();
+	}
+	else if(goc_state == STATE_VERIFY) {
+	    if(++op_counter < 4) {
+		xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + 172;
+	    }
+	    else {
+		goc_state = STATE_START;
+	    	op_counter = 0;
+		xot_timer_list[SEND_RAD] = start_hour_in_sec;
+	    }
+
+            radio_data_arr[0] = xot_timer_list[SEND_RAD];
+	    radio_data_arr[1] = xo_sys_time_in_sec;
+	    radio_data_arr[2] = CHIP_ID << 8;
+	    send_beacon();
+	}
 	else if(goc_state == STATE_START) {
 	    goc_state = STATE_COLLECT;
-            // xot_last_timer_list[STORE_LNT] = xo_sys_time_in_sec;
-            // xot_last_timer_list[STORE_SNT] = xo_sys_time_in_sec;
             xot_last_timer_list[STORE_LNT] = xot_last_timer_list[SEND_RAD];
             xot_last_timer_list[STORE_SNT] = xot_last_timer_list[SEND_RAD];
-            set_next_time(STORE_LNT, update_light_interval());
-            set_next_time(STORE_SNT, LNT_INTERVAL[2]);
             // xot_timer_list[STORE_LNT] = xo_sys_time_in_sec + update_light_interval();
             // xot_timer_list[STORE_SNT] = xo_sys_time_in_sec + LNT_INTERVAL[2];
+	    set_next_time(STORE_LNT, update_light_interval());
+	    set_next_time(STORE_SNT, LNT_INTERVAL[2]);
             xot_timer_list[SEND_RAD] = 0;
 	}
         else if(goc_state == STATE_COLLECT) {
@@ -2244,15 +2318,14 @@ int main() {
                     goc_state = STATE_RADIO;
 		}
 		else {
-	            goc_state = STATE_WAIT;
+		    pmu_set_sleep_low();
+	            operation_sleep();
 		}
                 reset_timers_list();
                 store_temp();       // store everything in temp_code_storage
                 store_light();
                 update_system_time();
-		// FIXME: change this back
                 xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + MRR_SIGNAL_PERIOD;
-                // xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + LNT_INTERVAL[0]; // FIXME: remove this
             }
     	    // mbus_write_message32(0xAA, xot_timer_list[STORE_LNT]);
 	    else {
@@ -2296,9 +2369,9 @@ int main() {
 		    else {
                         // send beacon
 			// If bottom bits are all 1s, then it must be beacon
-			radio_data_arr[2] = (radio_beacon_counter) << 8 | (CHIP_ID << 4) | radio_counter;
+			radio_data_arr[2] = CHIP_ID << 8;
 			radio_data_arr[1] = (read_data_batadc << 24) | snt_sys_temp_code;
-			radio_data_arr[0] = (xo_day_time_in_sec << 11) | 0x7FF;
+			radio_data_arr[0] = (radio_beacon_counter << 28) | (radio_counter << 20) | (xo_day_time_in_sec << 11) | 0x7FF;
 
                         mrr_send_radio_data(1);
 		    }
@@ -2311,9 +2384,6 @@ int main() {
                 set_next_time(SEND_RAD, MRR_SIGNAL_PERIOD);
             }
         }
-	else if(goc_state == STATE_WAIT) {
-	    // low power sleep
-	}
     }
     // }
 

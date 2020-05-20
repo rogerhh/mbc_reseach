@@ -1,0 +1,3 @@
+System Time, Gateway Ticks, CFO (MHz), SFO (KHz), RSSI (dB), Raw Decoded Data, Chip ID, Packet Type, Battery %, Temp, Humidity, Motion Count, Serial Number
+03-12-2020 12:04:21.505, 121684421101, 903.074, 475.045, 71.1284, 0x49d702005300046339da6fff, 0x0463, Serial Number, 0, 0, 0, 970616831, 970616831
+03-12-2020 12:04:24.247, 121949956780, 901.395, 475.045, 72.609, 0x49d702005300046339da6fff, 0x0463, Serial Number, 0, 0, 0, 970616831, 970616831

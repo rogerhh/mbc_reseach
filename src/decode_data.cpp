@@ -8,6 +8,7 @@
 #include <cmath>
 #include <utility>
 #include <stdexcept>
+#include <map>
 
 using namespace std;
 
@@ -16,6 +17,16 @@ void print_v(vector<uint32_t>& v) {
         cout << bitset<32>(v[i]) << " ";
     }
     cout << endl;
+}
+
+uint32_t extend(uint16_t val, uint8_t len) {
+    bitset<32> d(val);
+    bool res = d.test(len - 1);
+    for(int i = len; i < 32; i++) {
+        d[i] = res;
+    }
+
+    return (uint32_t) d.to_ulong();
 }
 
 void shift_left(vector<uint32_t>& v, uint8_t shift) {
@@ -85,13 +96,17 @@ uint8_t get_val(char c) {
 uint32_t LNT_INTERVAL[4] = {86, 172, 688, 2752};
 
 uint32_t find_full_timestamp(uint16_t xo_day_time_in_min, uint32_t hint) {
-    while((hint >> 6) != (xo_day_time_in_min )) {
+    uint32_t full_time = hint;
+    while((hint >> 6) > (xo_day_time_in_min + 1) || (hint >> 6) < (xo_day_time_in_min - 1)) {
+        // cout << hex << (hint >> 6) << " " << xo_day_time_in_min << endl;
         hint += LNT_INTERVAL[0];
+        full_time += LNT_INTERVAL[0];
         if(hint >= XO_MAX_DAY_TIME_IN_SEC) {
             hint -= XO_MAX_DAY_TIME_IN_SEC;
         }
     }
-    return hint;
+    cout << hint << endl;
+    return full_time;
 }
 
 class temp_unit {
@@ -100,12 +115,10 @@ class temp_unit {
 
 public:
     temp_unit(vector<uint32_t>& v) {
-        data |= v[2] & 0xFFFF;
-        data <<= 16;
-        data |= v[1];
+        data |= (v[1] & 0x1FFFFFFF);
         data <<= 32;
         data |= v[0];
-        size = 80;
+        size = 59;
     }
 
     uint16_t read(uint8_t len) {
@@ -128,27 +141,28 @@ public:
     light_unit() {}
 
     light_unit(vector<uint32_t> v0, vector<uint32_t> v1, int size_in) {
-        data |= (v0[2] & 0xFFFF);
-        data <<= 16;
-        data |= v0[1];
+        data = bitset<160>(0);
+        data |= bitset<160>(v0[2] & 0xFF);
         data <<= 32;
-        data |= v0[0];
+        data |= bitset<160>(v0[1]);
         data <<= 32;
-
-        data |= (v1[2] & 0xFFFF);
-        data <<= 16;
-        data |= v1[1];
+        data |= bitset<160>(v0[0]);
+        data <<= 8;
+        data |= bitset<160>(v1[2] & 0xFF);
         data <<= 32;
-        data |= v1[0];
+        data |= bitset<160>(v1[1]);
+        data <<= 32;
+        data |= bitset<160>(v1[0]);
 
         size = size_in;
+        cout << data << endl;
     }
 
-    uint16_t read(uint8_t len) {
+    uint16_t read(uint16_t len) {
         if(len > size) {
             throw runtime_error("Error reading len size " + to_string(len));
         }
-        uint16_t res = (uint16_t) (data & bitset<160>((1 << len) - 1)).to_ullong();
+        uint16_t res = (uint16_t) (data & bitset<160>((((uint16_t) 1) << len) - 1)).to_ulong();
         data >>= len;
         size -= len;
         return res;
@@ -166,7 +180,11 @@ int main(int argc, char** argv) {
     cout << "Enter start time in hour: " << endl;
     cin >> start_hour;
     uint32_t start_hour_in_sec = (start_hour * 3600 * 1553) >> XO_TO_SEC_SHIFT;
-    cout << "Start time in sec: " << start_hour_in_sec << endl;
+    cout << "Start time in sec: " << hex << start_hour_in_sec << endl;
+    ofstream light_fout(argv[1]);
+    ofstream temp_fout(argv[2]);
+    map<int, int> light_data_map; 
+    map<int, int> temp_data_map; 
 
     while(cin >> c) {
         buf.push_back(c);
@@ -180,9 +198,9 @@ int main(int argc, char** argv) {
             }
             buf.clear();
 
+            v[2] &= 0x0000FFFF;
             print_v(v);
 
-            v[2] &= 0x0000FFFF;
             if((v[0] & 0x7FF) == 0x7FF) {
                 // is beacon
             }
@@ -199,21 +217,26 @@ int main(int argc, char** argv) {
                     cout << "xo_day_time_in_min: " << xo_day_time_in_min << endl;
                     xo_day_time_in_sec = find_full_timestamp(xo_day_time_in_min, 
                                                              start_hour_in_sec);
-                    cout << "xo_day_time_in_sec: " << hex << xo_day_time_in_sec << endl;
+                    cout << "xo_day_time_in_sec: " << dec << xo_day_time_in_sec << endl;
 
-                    v[2] = 0;
-                    v[1] &= 0x1FFFFFFF;
+                    temp_unit tu(v);
 
-                    while(1) {
-                        uint8_t data = v[0] & ((1 << TEMP_RES) - 1);
-                        cout << bitset<8>(data | 0b10000000) << endl;
-                        shift_right(v, TEMP_RES);
-                        if(data == 0) {
-                            break;
+                    try {
+                    
+                        while(1) {
+                            uint16_t data = tu.read(7);
+                            if(data == 0) {
+                                break;
+                            }
+                            data |= 0b10000000;
+                            double raw_data = pow(2, (data / 16.0));
+                            cout << hex << xo_day_time_in_sec << " " << (uint32_t) raw_data << endl;
+                            temp_data_map[xo_day_time_in_sec] = raw_data;
+
+                            xo_day_time_in_sec -= LNT_INTERVAL[3];
                         }
-                        double raw_data = pow(2, ((double) (data | 0b10000000)) / 16.0);
-                        cout << hex << (uint32_t) raw_data << " ";
                     }
+                    catch(...) {}
                 }
                 else {
                     // is light
@@ -234,15 +257,14 @@ int main(int argc, char** argv) {
                         cout << "Light packet: " << packet_num << " CHIP_ID: " 
                              << chip_id << endl;
                         light_unit lu;
-                        cout << "size = " << even_light_packets.begin()->first << endl;
                         auto it = even_light_packets.find(chip_id);
                         if(it == even_light_packets.end() 
                                 || it->second.first != packet_num - 1) {
                             cout << "Last packet " << packet_num - 1 << " not found" << endl;
-                            lu = light_unit(vector<uint32_t>{3, 0}, v, 80);
+                            lu = light_unit(vector<uint32_t>{3, 0}, v, 72);
                         }
                         else {
-                            lu = light_unit(it->second.second, v, 160);
+                            lu = light_unit(it->second.second, v, 144);
                         }
                         even_light_packets.erase(chip_id);
 
@@ -251,24 +273,53 @@ int main(int argc, char** argv) {
                             xo_day_time_in_min = lu.read(11);
                             xo_day_time_in_sec = find_full_timestamp(xo_day_time_in_min, 
                                                                      start_hour_in_sec);
-                            cout << "xo_day_time_in_sec: " << hex << xo_day_time_in_sec << endl;
+                            cout << "xo_day_time_in_sec: " << dec << xo_day_time_in_sec  << " " << xo_day_time_in_min << endl;
                             final_ref_data = lu.read(11);
                             cout << final_ref_data << endl;
-                            uint16_t l1_mode = lu.read(2);
-                            uint16_t l1_len = lu.read(3);
-                            cout << "l1_mode: " << l1_mode << " ";
-                            cout << "l1_len: " << l1_len << endl;
+                            light_data_map[xo_day_time_in_sec] = final_ref_data;
+                            while(1) {
+                                uint16_t l1_mode = lu.read(2);
+                                uint16_t l1_len = lu.read(3);
+                                if(l1_len == 0) { break; }
+                                cout << "l1_mode: " << l1_mode << " ";
+                                cout << "l1_len: " << l1_len << endl;
 
-                            for(int i = 0; i < l1_len; i++) {
-                                uint16_t l2_mode = lu.read(2);
-                                uint16_t l2_len = lu.read(6 - l2_mode);
-                                cout << "l2_mode: " << l2_mode << " ";
-                                cout << "l2_len: " << l2_len << endl;
+                                for(int i = 0; i < l1_len; i++) {
+                                    uint16_t l2_mode = lu.read(2);
+                                    uint16_t l2_len = lu.read(6 - l2_mode);
+                                    cout << "l2_mode: " << l2_mode << " ";
+                                    cout << "l2_len: " << l2_len << endl;
 
-                                for(int j = 0; j < l2_len; j++) {
-                                    const uint16_t LEN_MODE[4] = {4, 6, 9, 11};
-                                    uint16_t diff = lu.read(LEN_MODE[l2_mode]);
-                                    cout << hex << diff << endl;
+                                    for(int j = 0; j < l2_len; j++) {
+                                        const uint16_t LEN_MODE[4] = {4, 6, 9, 11};
+                                        uint16_t diff = lu.read(LEN_MODE[l2_mode]);
+                                        cout << diff << endl;
+                                        if(l2_mode != 3) {
+                                            diff = extend(diff, LEN_MODE[l2_mode]);
+                                            final_ref_data += diff;
+                                        }
+                                        else {
+                                            if(diff - final_ref_data > (1 << 9) || diff < (1 << 9)) {
+                                                diff = extend(diff, LEN_MODE[l2_mode]);
+                                                final_ref_data += diff;
+                                            }
+                                            else {
+                                                final_ref_data = diff;
+                                            }
+                                        }
+
+                                        if(xo_day_time_in_sec > LNT_INTERVAL[l1_mode]) {
+                                            xo_day_time_in_sec -= LNT_INTERVAL[l1_mode]; 
+                                        }
+                                        else {
+                                            xo_day_time_in_sec = XO_MAX_DAY_TIME_IN_SEC 
+                                                                 + xo_day_time_in_sec 
+                                                                 - LNT_INTERVAL[l1_mode];
+                                        }
+                                        cout << dec << xo_day_time_in_sec 
+                                             << " " << final_ref_data << endl;
+                                        light_data_map[xo_day_time_in_sec] = final_ref_data;
+                                    }
                                 }
                             }
 
@@ -283,5 +334,13 @@ int main(int argc, char** argv) {
             cout << endl;
         }
 
+    }
+
+    for(auto it = light_data_map.begin(); it != light_data_map.end(); it++) {
+        light_fout << it->first << "," << pow(2, it->second / 32.0) << endl;
+    }
+
+    for(auto it = temp_data_map.begin(); it != temp_data_map.end(); it++) {
+        temp_fout << it->first << "," << it->second << endl;
     }
 }

@@ -1,0 +1,13 @@
+#ifndef MBC_PARAMS_0
+#define MBC_PARAMS_0
+
+#define CHIP_ID 0
+
+// FIXME: change these temporary values
+#define PMU_55C 0xF00
+const uint32_t PMU_TEMP_THRESH[6] = {0x190, 0x258, 0x3E8, 0x7D0, 0xC80, 0x1B58}; // {0, 10, 20, 30, 45, 60}
+
+const uint8_t PMU_ADC_THRESH[4] = {82, 83, 84, 85};
+
+
+#endif

@@ -53,6 +53,7 @@
  *  v5: Using PREv20E
  *    back to xo timer
  *    Change trigger cmd format
+ *    USING PMU OVERRIDE NOW
  *
  ******************************************************************************************/
 
@@ -1057,6 +1058,7 @@ static void lnt_stop() {
 #define MPLIER_SHIFT 6
 uint8_t lnt_snt_mplier = 0x52;
 uint32_t projected_end_time = 0;
+uint32_t lnt_meas_time = 0;
 
 static void update_lnt_timer() {
     if(xo_sys_time > projected_end_time + TIMER_MARGIN 
@@ -1081,9 +1083,9 @@ static void set_lnt_timer(uint32_t end_time) {
     }
 
     uint64_t temp = (projected_end_time - xo_sys_time) * lnt_snt_mplier;
-    uint32_t val = temp >> (MPLIER_SHIFT + XO_TO_SEC_SHIFT - 2);
+    lnt_meas_time = temp >> (MPLIER_SHIFT + XO_TO_SEC_SHIFT - 2);
     // uint32_t val = (end_time - xo_sys_time_in_sec) * 4;
-    lntv1a_r03.TIME_COUNTING = val;
+    lntv1a_r03.TIME_COUNTING = lnt_meas_time;
     mbus_remote_register_write(LNT_ADDR, 0x03, lntv1a_r03.as_int);
     lnt_start();
 }
@@ -2219,31 +2221,105 @@ int main() {
     // else if(goc_component == 0x04) {
     
     if(!(goc_data_full & 0x80000000)) {
-	uint8_t cmd = (goc_data_full >> 29) & 0x3;
-	if(cmd == 3) {
-	    mbus_write_message32(0xA5, get_timer_cnt_xo());
-	    mbus_write_message32(0xA5, get_timer_cnt_xo());
-	    mbus_write_message32(0xA5, get_timer_cnt_xo());
-	}
-	if(cmd == 2) {
-	    while(1);	// trigger WD timer
-	}
-	pmu_setting_temp_based(1);
-	if(cmd == 1) {
-	    // if force radio out, don't check voltage
-	    radio_full_data();
-	}
-	else {
+        // characterization code
+	uint8_t cmd = (goc_data_full >> 28) & 0x7;
+        reset_radio_data_arr();
+        if(cmd == 0) {
+            // send alive beacon
+	    pmu_setting_temp_based(1);
 	    radio_data_arr[2] = CHIP_ID << 8;
 	    radio_data_arr[1] = (mem_light_len << 24) | (mem_temp_len << 16) | xo_sys_time_in_sec;
 	    radio_data_arr[0] = (snt_sys_temp_code << 12) | read_data_batadc;
 	    mrr_send_radio_data(1);
-	}
-	pmu_setting_temp_based(0);
+        }
+        else if(cmd == 1) {
+            // packet blaster: send packets for 10s then sleep for 10s
+            update_system_time();
+	    pmu_setting_temp_based(1);
+            uint32_t start_time = xo_sys_time_in_sec;
+            do {
+                // blast packets for 10s regardless of battery state
+	        radio_data_arr[2] = CHIP_ID << 8;
+	        radio_data_arr[1] = 0x1817;
+	        radio_data_arr[0] = op_counter;
+                op_counter++;
+                update_system_time();
+            } while(xo_sys_time_in_sec - start_time < 14);
 
-	// safe sleep mode // manually set_temp_to_some_value
-	pmu_set_sleep_low();
-	operation_sleep();
+            // set 10s timer
+	    xot_timer_list[SEND_RAD] = xo_sys_time_in_sec + 14;
+
+        }
+        else if(cmd == 2) {
+            uint8_t use_pmu = (goc_data_full >> 27) & 0x1;
+            uint16_t goc_radio_time = goc_data_full & 0xFFFF;
+
+            // if !use_pmu, always radio out
+            if(!goc_state) {
+                goc_state = 1;
+            }
+            else if(goc_state == 1) {
+		goc_state = 0;
+                if(!use_pmu || mrr_send_enable) {
+		    op_counter++;
+                    pmu_setting_temp_based(1);
+                    radio_data_arr[0] = lnt_sys_light & 0xFFFFFFFF;
+                    radio_data_arr[1] = lnt_sys_light >> 32;
+                    radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x40);
+                    mrr_send_radio_data(0);
+                    radio_data_arr[0] = snt_sys_temp_code;
+                    radio_data_arr[1] = read_data_batadc;
+                    radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x41);
+                    mrr_send_radio_data(0);
+		    reset_radio_data_arr();
+		    update_system_time();
+		    radio_data_arr[0] = xo_sys_time;
+                    radio_data_arr[1] = lnt_meas_time;
+                    radio_data_arr[2] = (op_counter & 0xF) << 8 | (0x42);
+                    mrr_send_radio_data(1);
+
+		    set_next_time(START_LNT, goc_radio_time);
+                }
+            }
+        }
+        else if(cmd == 3) {
+            // send radio and sleep
+            pmu_setting_temp_based(1);
+	    radio_data_arr[2] = CHIP_ID << 8;
+	    radio_data_arr[1] = (mem_light_len << 24) | (mem_temp_len << 16) | xo_sys_time_in_sec;
+	    radio_data_arr[0] = (snt_sys_temp_code << 12) | read_data_batadc;
+	    mrr_send_radio_data(1);
+	    pmu_setting_temp_based(0);
+
+	    // safe sleep mode // manually set_temp_to_some_value
+	    pmu_set_sleep_low();
+	    operation_sleep();
+        }
+        else if(cmd == 4) {
+            // cymbet distance test
+            // blast 10 packets, then sleep for a minute
+            uint16_t goc_radio_time = goc_data_full & 0xFFFF;
+
+            uint8_t i = 0;
+            for(i = 0; i < 10; i++) {
+	        radio_data_arr[2] = CHIP_ID << 8;
+	        radio_data_arr[1] = 0;
+	        radio_data_arr[0] = 0;
+	        mrr_send_radio_data(i == 9);
+            }
+
+            set_next_time(SEND_RAD, goc_radio_time);
+
+        }
+        else if(cmd == 5) {
+            // battery drain test, all the measurements are performed when we wake up
+            // set 8 minute timers
+            set_next_time(SEND_RAD, LNT_INTERVAL[2]);
+        }
+        else if(cmd == 6) {
+            while(1);
+        }
+	pmu_setting_temp_based(0);
     }
     else {
 #define STATE_INIT 0

@@ -90,21 +90,27 @@ uint8_t get_val(char c) {
     } 
 }
 
-#define XO_MAX_DAY_TIME_IN_SEC 131034
-#define XO_TO_SEC_SHIFT 10
+#define XO_MAX_DAY_TIME_IN_SEC 86400
+#define XO_TO_SEC_SHIFT 15
 #define TEMP_RES 7
-uint32_t LNT_INTERVAL[4] = {86, 172, 688, 2752};
+uint32_t LNT_INTERVAL[4] = {60, 120, 480, 1920};
+
+uint32_t last_full_time = 0;
+uint32_t last_hint = 0;
 
 uint32_t find_full_timestamp(uint16_t xo_day_time_in_min, uint32_t hint) {
-    uint32_t full_time = hint;
+    uint32_t full_time = last_full_time == 0? hint : last_full_time;
+    hint = last_full_time == 0? hint : last_hint;
     while((hint >> 6) > (xo_day_time_in_min + 1) || (hint >> 6) < (xo_day_time_in_min - 1)) {
-        // cout << hex << (hint >> 6) << " " << xo_day_time_in_min << endl;
+        cout << hex << (hint >> 6) << " " << xo_day_time_in_min << endl;
         hint += LNT_INTERVAL[0];
         full_time += LNT_INTERVAL[0];
         if(hint >= XO_MAX_DAY_TIME_IN_SEC) {
             hint -= XO_MAX_DAY_TIME_IN_SEC;
         }
     }
+    last_full_time = full_time;
+    last_hint = hint;
     cout << hint << endl;
     return full_time;
 }
@@ -179,13 +185,14 @@ int main(int argc, char** argv) {
     vector<char> buf;
     cout << "Enter start time in hour: " << endl;
     cin >> start_hour;
-    uint32_t start_hour_in_sec = (start_hour * 3600 * 1553) >> XO_TO_SEC_SHIFT;
+    uint32_t start_hour_in_sec = (start_hour * 3600);
     cout << "Start time in sec: " << hex << start_hour_in_sec << endl;
     ofstream light_fout(argv[1]);
     ofstream temp_fout(argv[2]);
-    ofstream light_log_fout("light_decode_log.csv");
     map<int, int> light_data_map; 
     map<int, int> temp_data_map; 
+
+    bool temp_init = false;
 
     while(cin >> c) {
         buf.push_back(c);
@@ -212,6 +219,12 @@ int main(int argc, char** argv) {
                 uint16_t xo_day_time_in_min;
                 uint32_t xo_day_time_in_sec;
                 if(!temp_or_light) {
+                    // re-initialize hint
+                    if(!temp_init) {
+                        temp_init = true;
+                        last_full_time = 0;
+                        last_hint = 0;
+                    }
                     // is temp
                     cout << "Temp packet: " << packet_num << " CHIP_ID: " << chip_id << endl;
                     xo_day_time_in_min = ((v[2] & 0xFF) << 3) | (v[1] >> 29);
@@ -337,10 +350,7 @@ int main(int argc, char** argv) {
 
     }
 
-    uint16_t last_code = 0;
     for(auto it = light_data_map.begin(); it != light_data_map.end(); it++) {
-        light_log_fout << it->first << "," << it->second << "," << it->second - last_code << endl;
-        last_code = it->second;
         light_fout << it->first << "," << pow(2, it->second / 32.0) << endl;
     }
 

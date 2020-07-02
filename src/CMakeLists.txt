@@ -45,3 +45,4 @@ target_link_libraries(weatherStation sqlite3 curl)
 add_executable(process_electrometer_data.exe process_electrometer_data.cpp)
 
 add_subdirectory(compression_sim)
+add_subdirectory(utils)

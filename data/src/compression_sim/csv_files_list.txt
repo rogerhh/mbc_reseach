@@ -1,201 +1,110 @@
 
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20305333_2019-10-29_11_05_38_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20305333_2019-11-05_12_15_08_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20305333_2019-11-12_14_36_53_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20305333_2019-11-19_16_32_26_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369362_2019-10-19_15_47_24_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369362_2019-10-27_07_11_33_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369362_2019-11-04_22_40_10_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369363_2019-11-08_16_45_11_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369363_2019-11-16_08_10_31_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369366_2019-11-05_14_20_44_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369368_2019-11-07_22_30_42_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20369368_2019-11-14_21_26_10_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418690_2019-11-03_15_58_49_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418690_2019-11-10_17_07_23_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418690_2019-11-19_17_26_52_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418694_2019-11-01_20_59_17_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418694_2019-11-08_19_01_46_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418694_2019-11-17_08_08_07_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-09-27_13_55_30_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-10-04_16_01_44_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-10-11_12_12_23_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-10-18_20_01_54_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-10-25_18_38_07_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-11-01_20_58_04_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-11-08_17_16_39_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418696_2019-11-15_18_36_41_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418704_2019-11-04_11_00_08_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418704_2019-11-12_09_52_59_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418704_2019-11-18_12_38_38_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418705_2019-10-25_15_22_02_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20418705_2019-11-09_14_35_03_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425143_2019-11-07_13_24_20_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425143_2019-11-14_13_06_36_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425145_2019-11-02_14_15_43_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425145_2019-11-07_16_05_56_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425146_2019-11-04_10_50_50_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425146_2019-11-11_10_23_57_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425146_2019-11-18_09_13_52_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425147_2019-11-06_16_35_53_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425147_2019-11-11_07_50_03_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425148_2019-11-04_10_58_58_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425148_2019-11-11_14_31_12_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425148_2019-11-18_09_29_57_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425150_2019-11-03_16_25_10_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425150_2019-11-10_16_54_53_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425150_2019-11-17_16_03_25_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425153_2019-10-05_12_02_10_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425153_2019-11-03_14_46_07_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425153_2019-11-09_17_01_56_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425153_2019-11-17_17_32_26_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425154_2019-11-06_10_02_33_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425162_2019-11-18_12_12_42_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425169_2019-10-30_09_56_31_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20425169_2019-11-06_16_43_00_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433766_2019-10-25_16_27_36_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433766_2019-11-02_09_04_04_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433766_2019-11-08_18_27_24_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433766_2019-11-16_10_22_56_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433771_2019-11-03_18_59_20_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433771_2019-11-10_14_40_33_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433772_2019-10-05_07_58_39_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433772_2019-10-24_18_08_12_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433772_2019-11-01_17_40_12_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433772_2019-11-07_13_05_41_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433772_2019-11-11_11_53_58_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433772_2019-11-20_10_14_28_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433776_2019-10-08_08_30_29_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433776_2019-10-13_17_08_55_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433780_2019-11-01_12_32_39_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433780_2019-11-08_12_16_32_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433780_2019-11-18_20_18_56_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433782_2019-11-10_07_58_45_-0800.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433782_2019-11-18_14_56_21_-0800.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433790_2019-11-03_16_52_36_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433790_2019-11-17_10_15_46_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433792_2019-11-10_09_23_51_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433792_2019-11-17_18_58_19_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433793_2019-10-20_16_48_21_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433793_2019-10-30_17_50_01_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433793_2019-11-05_10_30_36_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433793_2019-11-16_16_29_19_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433804_2019-10-22_07_45_28_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433804_2019-11-06_15_48_56_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433805_2019-10-21_17_30_39_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433805_2019-10-28_17_43_33_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433805_2019-11-18_18_31_42_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433806_2019-11-02_12_08_46_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433806_2019-11-10_09_57_06_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433806_2019-11-15_07_39_41_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433807_2019-11-07_16_37_02_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433807_2019-11-17_17_08_32_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433808_2019-11-02_10_42_52_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433808_2019-11-09_11_34_31_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433808_2019-11-16_11_02_36_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433810_2019-11-03_13_02_55_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433810_2019-11-06_14_55_36_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433810_2019-11-13_12_03_23_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433813_2019-11-03_16_55_58_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433815_2019-10-20_10_39_41_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433815_2019-10-27_13_02_09_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433815_2019-11-03_12_30_01_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433815_2019-11-10_12_04_51_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20433815_2019-11-17_11_20_43_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680267_2019-11-07_09_52_44_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680270_2019-10-25_15_20_22_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680270_2019-11-01_15_40_42_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680270_2019-11-15_11_50_24_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680275_2019-10-30_15_12_31_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680275_2019-11-08_18_15_41_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680275_2019-11-15_08_46_17_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680279_2019-11-01_16_42_46_-0300.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680279_2019-11-08_18_21_46_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680279_2019-11-16_18_29_05_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680283_2019-10-15_11_47_33_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680283_2019-10-21_11_12_11_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680283_2019-11-05_16_11_45_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680283_2019-11-13_12_36_48_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680283_2019-11-20_13_42_52_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680284_2019-11-03_11_21_43_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680284_2019-11-10_14_30_40_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680284_2019-11-17_11_02_59_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680285_2019-10-24_19_01_15_-0700.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680285_2019-11-01_07_55_04_-0700.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680285_2019-11-09_06_46_11_-0800.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680285_2019-11-18_08_20_53_-0800.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680286_2019-11-02_16_30_10_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680286_2019-11-14_14_40_15_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680297_2019-11-06_11_00_59_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680297_2019-11-13_10_32_07_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680297_2019-11-20_09_59_34_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680298_2019-10-09_14_40_41_-0400_0.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680298_2019-10-09_14_40_41_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680298_2019-10-26_17_40_39_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680298_2019-11-04_16_48_46_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680299_2019-11-02_19_04_32_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680299_2019-11-10_12_33_51_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680299_2019-11-16_17_21_17_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680300_2019-10-06_12_34_13_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680300_2019-10-20_14_56_09_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680302_2019-10-19_10_24_33_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680302_2019-11-03_08_02_13_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680302_2019-11-10_08_32_16_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680308_2019-11-02_19_14_12_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680308_2019-11-11_14_58_27_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680308_2019-11-17_14_32_46_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680309_2019-11-04_17_57_51_-0400.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680309_2019-11-11_17_27_21_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680309_2019-11-19_17_01_37_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680312_2019-11-03_11_35_12_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680312_2019-11-08_06_10_02_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680313_2019-10-24_08_19_28_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680313_2019-11-02_13_12_00_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680314_2019-11-03_13_22_39_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680314_2019-11-17_13_59_41_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680320_2019-10-01_14_01_03_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680321_2019-10-22_11_17_16_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680321_2019-10-29_18_11_18_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680321_2019-11-04_16_19_01_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680322_2019-10-20_19_48_28_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680322_2019-10-30_17_56_47_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680322_2019-11-05_18_16_28_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680322_2019-11-15_19_36_50_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680323_2019-10-14_22_39_44_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680323_2019-10-22_18_12_13_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680323_2019-11-01_19_43_20_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680323_2019-11-07_20_17_22_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680323_2019-11-15_08_03_15_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20369362_2019-12-09_07_07_33_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20369363_2019-11-23_11_10_07_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20369363_2019-12-01_14_55_11_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20369368_2019-11-21_19_18_34_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20369368_2019-12-01_17_51_56_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20369368_2019-12-10_21_56_54_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20369368_2019-12-21_21_19_46_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418690_2019-11-24_14_43_26_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418690_2019-12-01_17_52_47_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418690_2019-12-08_19_28_38_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418690_2019-12-15_19_23_25_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418694_2019-11-23_10_54_09_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418694_2019-12-06_09_34_47_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418694_2019-12-13_09_05_50_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418694_2019-12-27_13_29_36_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418696_2019-11-15_18_36_41_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418696_2019-11-24_14_23_48_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418696_2019-12-02_13_49_01_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418696_2019-12-09_22_05_28_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418696_2019-12-15_17_52_01_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418696_2019-12-18_23_42_32_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418699_2019-10-29_18_47_29_-0700.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418699_2019-11-10_15_01_54_-0800.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418699_2019-11-19_10_40_04_-0800.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418699_2019-11-26_12_46_11_-0800.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418703_2019-10-20_09_21_16_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418703_2019-11-03_08_40_04_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418703_2019-11-17_10_50_54_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418703_2019-11-23_08_01_12_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418703_2019-12-01_13_07_50_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_11/SN_20418703_2019-12-15_20_05_43_-0600.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_9/SN_20680323_2019-10-14_22_39_44_-0500.csv
-/home/rogerhh/Dropbox/UMICH/EE Research/data/csv_files_10/SN_20680267_2019-11-14_12_23_22_-0500.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv
+/home/rogerhh/SN_20418697_2018-10-29_17_39_10_-0400.csv

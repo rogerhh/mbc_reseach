@@ -569,8 +569,8 @@ void right_shift_arr(uint32_t* arr, uint32_t data, int16_t len) {
     while(len > 32) {
         // shift word be word until len is less than 32
         int8_t i;
-        for(i = start; i != end; i += sign) {
-            arr[i] = arr[i + sign];
+        for(i = start; i != end; i -= sign) {
+            arr[i] = arr[i - sign];
         }
         arr[back] = 0;
         len -= 32;
@@ -587,9 +587,9 @@ void right_shift_arr(uint32_t* arr, uint32_t data, int16_t len) {
     }
     complement += len;
 
-    for(i = start; i != end; i += sign) {
+    for(i = start; i != end; i -= sign) {
         arr[i] = right_shift(arr[i], len);
-        arr[i] |= right_shift(arr[i + sign], complement);
+        arr[i] |= right_shift(arr[i - sign], complement);
     }
     arr[back] = right_shift(arr[back], len);
     arr[back] |= data;
@@ -658,10 +658,10 @@ void store_end_idx() {
 void flush_unit() {
     if(cache_remainder < CACHE_MAX_SIZE) {
         // first shift 0s to the unused data
-        store_end_idx()
+        store_end_idx();
         store_data_to_cache(0, cache_remainder, 0);
         
-        mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) cur_mem_addr, light_code_storage, CACHE_LEN - 1);
+        mbus_copy_mem_from_local_to_remote_bulk(MEM_ADDR, (uint32_t*) cur_mem_addr, cache, CACHE_LEN - 1);
         cache_remainder = CACHE_MAX_SIZE;
         cur_mem_addr += CACHE_LEN * 4; // CACHE_LEN * 10B
     }
@@ -704,13 +704,13 @@ void sample_light() {
         store_data_to_cache(0, 7, 1);
     }
     
-    store_data_to_cache(code[code_idx], code_len[code_idx]);
+    store_data_to_cache(code[code_idx], code_len[code_idx], 0);
 
     if(code_idx == 64) {
-        store_data_to_cache(diff, 9);
+        store_data_to_cache(diff, 9, 0);
     }
     else if(code_idx == 65) {
-        store_data_to_cache(diff, 11);
+        store_data_to_cache(diff, 11, 0);
     }
 
     last_log_light = log_light;
@@ -742,7 +742,6 @@ uint32_t start_day_time = 0;
 uint32_t cur_sunrise = 0, cur_sunset = 0, next_sunrise = 0, next_sunset = 0;
 uint32_t cur_edge = 0;
 uint32_t buffered_projected_time_in_sec = 0;
-uint32_t next_sys_time_in_sec = 0; // FIXME: replace with projected_end_time_in_sec
 
 uint8_t is_morning = 0;
 uint8_t cur_index = 0;
@@ -812,7 +811,7 @@ void start_half_day() {
     }
     else {
         storing_data = 1;   // afternoon starts with storing data
-        cur_sunset = next_sunset == 0? cur_sunrise : next_sunrise;
+        cur_sunset = next_sunset == 0? cur_sunset : next_sunset;
         next_sunset = 0;
         cur_edge = cur_sunset;
 
@@ -867,25 +866,17 @@ void set_next_lnt_meas_time() {
         running_avg[rot_idx] = light_code;
 
         rot_idx = (rot_idx + 1) & 0x7;
-
-        if(is_morning) {
-            if((sum >> 3) > STORE_DATA_THRESHOLD) {
-                storing_data = 1;
-            }
-        }
-        else {
-            if((sum >> 3) <= STORE_DATA_THRESHOLD) {
-                storing_data = 0;
-            }
-        }
-
     }
 
-    if(is_morning && sum >= STORING_THRESHOLD) {
-        storing_data = 1;
+    if(is_morning) {
+        if((sum >> 3) > STORE_DATA_THRESHOLD) {
+            storing_data = 1;
+        }
     }
-    else if(!is_morning && sum < STORING_THRESHOLD) {
-        storing_data = 0;
+    else {
+        if((sum >> 3) <= STORE_DATA_THRESHOLD) {
+            storing_data = 0;
+        }
     }
 
     // store LNT
@@ -904,7 +895,7 @@ void set_next_lnt_meas_time() {
 
     if(target) {
         target = running_avg_time[(rot_idx + 3) & 0x7];
-        if(target > cur_edgea + MAX_EDGE_SHIFT) {
+        if(target > cur_edge + MAX_EDGE_SHIFT) {
             target = cur_edge + MAX_EDGE_SHIFT;
         }
         else if(target < cur_edge - MAX_EDGE_SHIFT) {
@@ -928,14 +919,13 @@ void set_next_lnt_meas_time() {
         start_half_day();
     }
     else {
-        set_projected_end_time();
 
         cur_index++;
         if(cur_index >= SAMPLE_INDICES[interval_index]) {
             interval_index++;
         }
-
     }
+    set_projected_end_time();
 }
 
 /**********************************************

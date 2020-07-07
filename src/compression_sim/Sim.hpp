@@ -17,11 +17,6 @@
 
 class Sim {
 public:
-    uint16_t rot_idx = 0;
-    uint16_t running_avg[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint16_t sum = 0xFFFF;
-    int running_avg_time[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-
     uint32_t start_day_time = 0;
     uint32_t start_hour_plus_one = 0;
     uint32_t SN = 0;
@@ -29,6 +24,11 @@ public:
     std::tm start_tm;
     int tz_hr = 0, tz_min = 0;
     std::string tz_sign;
+
+    uint16_t rot_idx = 0;
+    uint16_t running_avg[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    uint16_t sum = 0xFFFF;
+    int running_avg_time[8] = {0, 0, 0, 0, 0, 0, 0, 0};
 
     int cur_sunrise = 0, cur_sunset = 0, next_sunrise = 0, next_sunset = 0;
     uint32_t sys_time = 0, day_time = 0, sys_to_epoch_offset = 0, next_sys_time = 0;
@@ -67,7 +67,7 @@ public:
 
     std::string parse_day_time(uint32_t ts);
 
-    std::uint32_t day_time_2_sec(std::string str);
+    uint32_t day_time_2_sec(std::string str);
 
     std::map<std::time_t, double> read_file(const std::string& filename);
     

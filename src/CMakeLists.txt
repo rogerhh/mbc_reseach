@@ -46,3 +46,4 @@ add_executable(process_electrometer_data.exe process_electrometer_data.cpp)
 
 add_subdirectory(compression_sim)
 add_subdirectory(utils)
+add_subdirectory(weather_station)

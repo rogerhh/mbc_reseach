@@ -727,7 +727,7 @@ void Sim::start_compression_sim(uint32_t day_time_in, uint32_t sys_time_in,
             cur_sunset = next_sunset == 0? cur_sunset : next_sunset;
             next_sunset = 0;
             last_light_code = 0;
-            bit_count += (7 + 17 + 7 + 7); // day_count + sunrise/sunset_time + start_idx + end_idx
+            // bit_count += (7 + 17 + 7 + 7); // day_count + sunrise/sunset_time + start_idx + end_idx
         }
         else if(!is_morning && ((day_time >= MAX_DAY_TIME - 1920) || cur_index >= dawn_indices[7])) {
             is_morning = 1;
@@ -737,7 +737,7 @@ void Sim::start_compression_sim(uint32_t day_time_in, uint32_t sys_time_in,
             next_sunrise = 0;
             last_light_code = 0;
             day_count++;
-            bit_count += (7 + 17 + 7 + 7); // day_count + sunrise/sunset_time + start_idx + end_idx
+            // bit_count += (7 + 17 + 7 + 7); // day_count + sunrise/sunset_time + start_idx + end_idx
         }
         else {
             next_sys_time = sys_time + (INTERVALS[interval_index] * 60);
@@ -789,3 +789,4 @@ void Sim::start_compression_sim(uint32_t day_time_in, uint32_t sys_time_in,
 
     cout << "data size = " << data.size() << endl;
 }
+

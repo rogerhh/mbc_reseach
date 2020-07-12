@@ -12,10 +12,11 @@
 #define MAX_EDGE_SHIFT 600
 #define MAX_DAY_TIME 86400
 #define MID_DAY_TIME 43200
-#define EDGE_MARGIN1 10770 // 179 * 60 + 30 = 10770
-#define EDGE_MARGIN2 3570 // 59 * 60 + 30 = 3570
+#define IDX_MAX 239         // x = 179, y = 59, x + y + 1
+#define EDGE_MARGIN1 10770 // x * 60 + 30 = 10770
+#define EDGE_MARGIN2 3570 // y * 60 + 30 = 3570
 
-#define EDGE_THRESHOLD 372 // = log2(2 lux * 1577) * 32
+#define EDGE_THRESHOLD 200 // = log2(2 lux * 1577) * 32
 
 #define XO_1_MIN 60
 #define XO_8_MIN 480
@@ -29,10 +30,12 @@ public:
     uint32_t start_hour_plus_one = 0;
     uint32_t SN = 0;
 
+    double lat = 0xFFFF, lon = 0xFFFF;
     std::tm start_tm;
     int tz_hr = 0, tz_min = 0;
     std::string tz_sign;
     std::string filename;
+    std::string raw_filename;
     std::map<uint32_t, double> sample_times_map;
     std::ofstream sample_times_fout;
 
@@ -51,11 +54,15 @@ public:
     uint32_t sys_to_epoch_offset = 0, projected_end_time_in_sec = 0;
     uint32_t starting_idx_time = 0;
 
-    uint8_t max_idx = 0;
-    uint8_t starting_idx = 0xFF;
-    uint8_t intervals[4] = {1, 2, 8, 32};
-    uint16_t resample_indices[4] = {32, 40, 42, 1000};
+#define STARTING_IDX_INIT 0xFF
+#define STARTING_IDX_SHIFT 8 // = 4 + 4
 
+    uint8_t max_idx = 0;
+    int16_t starting_idx = 0xFF;
+    uint8_t intervals[4] = {1, 2, 8, 32};
+    uint16_t resample_indices[4] = {36, 42, 44, 1000};
+
+    // 64 = 9 bit, 65 = 11 bit, 66 = stop
     uint16_t diff_codes[67];
     uint8_t code_lengths[67];
 
@@ -73,10 +80,9 @@ public:
 #define NIGHT 3
     uint8_t day_state = DAWN;
 
-#define CACHE_START_ADDR 16024 // (4096 - ceil(240 * 11 / 320) * 10) << 2
+#define CACHE_START_ADDR 16024 // (4096 - ceil(240 / floor(320 / 11)) * 10) << 2 = (4096 - 90) * 4
     uint16_t cache_addr = CACHE_START_ADDR;
     uint16_t code_addr = 0;
-    uint16_t mem_addr;
     uint32_t mem[4096];
 #define PROC_CACHE_LEN 10
 #define PROC_CACHE_MAX_REMAINDER 320
@@ -91,7 +97,7 @@ public:
                    uint32_t epoch_time,
                    const std::string& sample_times_file);
 
-    void configure_sim();
+    void configure_sim(double lat_in, double lon_in);
 
     void wake_up_and_run();
 
@@ -101,7 +107,7 @@ public:
 
     void store_diff_to_code_cache(int16_t diff, uint8_t starting_idx, uint32_t edge_time);
 
-    void store_code(int32_t code, uint8_t len);
+    void store_code(int32_t code, int8_t len);
 
     void store_day_state_stop();
 
@@ -111,7 +117,7 @@ public:
 
     void read_from_mem(uint32_t* arr, uint16_t addr, uint8_t len);
 
-    Sim(const std::string& filename_in);
+    Sim(const std::string& filename_in, bool train_in);
     ~Sim();
 
     std::map<std::time_t, double> read_file(const std::string& filename);

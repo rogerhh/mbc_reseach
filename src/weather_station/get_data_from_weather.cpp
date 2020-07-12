@@ -13,13 +13,13 @@ int main(int argc, char** argv) {
     double lat = 42.292;
     double lon = -83.716;
     // string cmd = "curl \"api.weatherbit.io/v2.0/history/hourly?station=" + station_id + "&start_date=" + start_date + "&end_date=" + end_date + "&tz=utc&key=8942e41ad9544b3fb9e4f061b01aa5e7\" > /tmp/ws_data.json"; 
-    string cmd = "curl \"api.weatherbit.io/v2.0/history/hourly?lat=" + to_string(lat) + "&lon=" + to_string(lon) + "&start_date=" + start_date + "&end_date=" + end_date + "&tz=utc&key=8942e41ad9544b3fb9e4f061b01aa5e7\" > /tmp/ws_data.json"; 
+    string cmd = "curl \"api.weatherbit.io/v2.0/history/hourly?lat=" + to_string(lat) + "&lon=" + to_string(lon) + "&start_date=" + start_date + "&end_date=" + end_date + "&tz=utc&key=8942e41ad9544b3fb9e4f061b01aa5e7\" > ws_data.json"; 
     cout << "cmd = " << cmd << endl;
 
     system(cmd.c_str());
 
-    ifstream fin("/tmp/ws_data.json");
-    ofstream fout("/home/rogerhh/mbc_research/src/weather_station/ws_data.csv");
+    ifstream fin("ws_data.json");
+    ofstream fout("ws_data.csv");
 
     if(!fout.is_open()) {
         cout << "not open" << endl;
@@ -33,6 +33,11 @@ int main(int argc, char** argv) {
     }
 
     Json json = Json::parse(data, err);
+
+    for(auto a : json["sources"].array_items()) {
+        fout << a.string_value() << " ";
+    }
+    cout << endl;
 
     for(auto a : json["data"].array_items()) {
         time_t ts = a["ts"].int_value();

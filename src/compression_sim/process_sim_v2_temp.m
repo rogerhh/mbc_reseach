@@ -16,4 +16,5 @@ for i = 1:size(v, 1)
 end
 % plot(v(:, 1), a, '.')
 figure(2)
+SN2 = SN20418697201810291739100400;
 plot(SN2.VarName2, log10(SN2.VarName4));

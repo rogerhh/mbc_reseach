@@ -17,7 +17,7 @@ map<time_t, double> read_file(const string& filename) {
         cout << "Error opening file: " << filename << endl;
         assert(0);
     }
-
+    
     // read SN
     string line;
     getline(fin, line);

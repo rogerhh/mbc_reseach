@@ -1,6 +1,7 @@
 build/
 data/*.db
 data/*.tar
+data/src/compression_sim/
 
 .exe
 .db

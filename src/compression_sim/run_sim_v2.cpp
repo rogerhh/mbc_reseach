@@ -18,7 +18,7 @@ using namespace std;
 int main(int argc, char** argv) {
     string ppath = getenv("PROJECT_DIR");
     ppath += "/data/src/compression_sim/";
-    ifstream csv_list_fin(ppath + "csv_files_list.txt");
+    ifstream csv_list_fin(ppath + "csv_files_list_v2.txt");
 
     set<string> names;
     string name;
@@ -28,13 +28,13 @@ int main(int argc, char** argv) {
     csv_list_fin.close();
 
     string filename = string(argv[1]);
-    // if(names.find(filename) != names.end()) {
-    //     // filename already processed
-    //     return 0;
-    // }
+    if(names.find(filename) != names.end()) {
+        // filename already processed
+        return 0;
+    }
 
     // cout << filename << endl;
-    Sim sim(filename);
+    Sim sim(filename, true);
     // sim.start_sim(78600, 10000, 22, 96, 29340, 60657, 1577670600, "sample_times.csv");
 
     time_t start_time = sim.measurement_map.begin()->first, end_time = sim.measurement_map.rbegin()->first;
@@ -61,6 +61,8 @@ int main(int argc, char** argv) {
 
     double lat = stod(m.str(3)), lon = stod(m.str(4));
 
+    sim.configure_sim(lat, lon);
+
     cmd = "curl \"https://api.sunrise-sunset.org/json?lat=" + to_string(lat) + "&lng=" + to_string(lon) + "&date=" + to_string(sim.start_tm.tm_year + 1900) 
             + "-" + to_string(sim.start_tm.tm_mon + 1) + "-" + to_string(sim.start_tm.tm_mday) + "\" 1> /tmp/run_sim_sunrise_sunset.tmp 2> /dev/null";
     // cout << cmd << endl;
@@ -80,14 +82,14 @@ int main(int argc, char** argv) {
     uint32_t duration = (end_time - start_time) / 3600 - 1;
     // cout << start_time << " " << end_time << endl;
     // cout << "duration = " << duration << endl;
-    sim.start_sim(sim.start_day_time, 0, sim.start_hour_plus_one, duration, sunrise, sunset, start_time, "/home/rogerhh/mbc_research/data/src/compression_sim/sample_times_v2.csv");
+    sim.start_sim(sim.start_day_time, 0, sim.start_hour_plus_one, duration, sunrise, sunset, start_time, ppath + "sample_times_v2.csv");
 
     // sim.start_sim(57000, 10000, 16, 24*31, 26504, 71122, 1537127400, "sample_times_1_month.csv");
 
     // map<time_t, double> data_map = read_file(filename);
     // cout << get_data(data_map, 1576103505) << " " << get_data(data_map, 1576103510) << " " << get_data(data_map, 1576103515) << " " << get_data(data_map, 1576103520) << endl;
 
-    ofstream csv_list_fout(ppath + "csv_files_list.txt", ios::out | ios::app);
+    ofstream csv_list_fout(ppath + "csv_files_list_v2.txt", ios::out | ios::app);
     csv_list_fout << filename << endl;
 
 }

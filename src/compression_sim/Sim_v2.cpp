@@ -11,16 +11,20 @@
 #include <iomanip>
 #include <cmath>
 #include <bitset>
+#include <cstdlib>
 
 using namespace json11;
 using namespace std;
 
-Sim::Sim(const string& filename_in) {
+Sim::Sim(const string& filename_in, bool train_in) : train(train_in) {
     measurement_map = read_file(filename_in);
     regex e("(.+)\/(.+)\.csv");
     smatch m;
     regex_search(filename_in, m, e);
-    filename = "/home/rogerhh/mbc_research/data/src/compression_sim/sample_data/" + m.str(2) + "_sample_times.csv";
+
+    string ppath = getenv("PROJECT_DIR");
+    ppath += "/data/src/compression_sim/";
+    filename = ppath + "sample_data/" + m.str(2) + "_sample_times.csv";
     sample_times_fout = ofstream(filename);
     cout << filename << endl;
     if(!sample_times_fout.is_open()) {
@@ -28,7 +32,7 @@ Sim::Sim(const string& filename_in) {
         exit(1);
     }
 
-    ifstream hist_fin("/home/rogerhh/mbc_research/data/src/compression_sim/histogram.txt");
+    ifstream hist_fin(ppath + "histogram.txt");
 
     int code, count;
     while(hist_fin >> code >> count) {
@@ -36,10 +40,42 @@ Sim::Sim(const string& filename_in) {
     }
 
     hist_fin.close();
+
+    // read code
+    ifstream code_fin(ppath + "huffman_tree_v2.txt");
+    uint16_t len;
+    uint16_t num;
+    string str;
+    while(code_fin >> code >> len >> num >> str) {
+        // cout << code << " " << len << " " << num << " " << str << endl;
+        if(code == 0x1FF) {
+            diff_codes[64] = num;
+            code_lengths[64] = len;
+        }
+        else if(code == 0x7FF) {
+            diff_codes[65] = num;
+            code_lengths[65] = len;
+        }
+        else if(code == 0x400) {
+            diff_codes[66] = num;
+            code_lengths[66] = len;
+        }
+        else {
+            diff_codes[code + 32] = num;
+            code_lengths[code + 32] = len;
+        }
+    }
 }
 
 Sim::~Sim() {
-    ofstream hist_fout("/home/rogerhh/mbc_research/data/src/compression_sim/histogram.txt");
+    string ppath = getenv("PROJECT_DIR");
+    ppath += "/data/src/compression_sim/";
+    ofstream hist_fout(ppath + "histogram.txt");
+
+    if(!hist_fout.is_open()) {
+        cout << "Error opening hist file" << endl;
+        assert(0);
+    }
 
     for(auto p : hist) {
         hist_fout << p.first << " " << p.second << endl;
@@ -139,6 +175,11 @@ void Sim::start_sim(uint32_t day_time_in, uint32_t sys_time_in,
                     uint32_t epoch_time,
                     const string& sample_times_file) {
 
+    if(lat == 0xFFFF) {
+        cerr << "Latitude and longitude information not set. Aborting..." << endl;
+        assert(0);
+    }
+
     xo_day_time_in_sec = day_time_in;
     xo_sys_time_in_sec = sys_time_in;
     cur_sunrise = cur_sunrise_in;
@@ -162,8 +203,10 @@ void Sim::start_sim(uint32_t day_time_in, uint32_t sys_time_in,
     projected_end_time_in_sec = xo_sys_time_in_sec + XO_8_MIN;
     cur_edge = projected_end_time_in_sec;
 
+    /*
     cout << "end_time = " << end_time << endl
          << "max query = " << end_time + sys_to_epoch_offset << endl;
+         */
 
 
     while(1) {          
@@ -188,7 +231,7 @@ void Sim::wake_up_and_run() {
     uint64_t lnt_sys_light = get_data(measurement_map, xo_sys_time_in_sec + sys_to_epoch_offset);
     // measure and store to cache
     uint16_t log_light = func_log2(lnt_sys_light);
-    cout << "log_light = " << log_light << endl;
+    cout << "log_light = " << log_light << " " << get_raw_data(measurement_map, xo_sys_time_in_sec + sys_to_epoch_offset) << endl;
     write_to_proc_cache(log_light, 11);
 
     // store to running sum
@@ -213,15 +256,16 @@ void Sim::wake_up_and_run() {
 
     uint32_t target = 0;
     cout << "avg = " << (sum >> 3) << " " << EDGE_THRESHOLD << endl;
-    if(day_state == DAWN && starting_idx == 0xFF && (sum >> 3) >= EDGE_THRESHOLD) {
-        starting_idx = max_idx;
-        starting_idx_time = projected_end_time_in_sec;
+
+    if(day_state == DAWN && starting_idx == STARTING_IDX_INIT && (sum >> 3) >= EDGE_THRESHOLD) {
+        starting_idx = max_idx >= STARTING_IDX_SHIFT? (max_idx - STARTING_IDX_SHIFT) : 0;
+        starting_idx_time = max_idx >= STARTING_IDX_SHIFT? (projected_end_time_in_sec - STARTING_IDX_SHIFT * 60) : starting_idx_time;
         target = running_avg_time[(rot_idx + 3) & 7];
         cout << "starting_idx = " << (int) starting_idx << "; starting_idx_time = " << starting_idx_time << endl;
     }
     else if(day_state == DUSK && starting_idx == 0xFF && (sum >> 3) <= EDGE_THRESHOLD) {
-        starting_idx = max_idx;
-        starting_idx_time = projected_end_time_in_sec;
+        starting_idx = max_idx <= (IDX_MAX - STARTING_IDX_SHIFT)? (max_idx + STARTING_IDX_SHIFT) : IDX_MAX;
+        starting_idx_time = max_idx <= (IDX_MAX - STARTING_IDX_SHIFT)? (projected_end_time_in_sec + STARTING_IDX_SHIFT * 60) : (projected_end_time_in_sec + (IDX_MAX - max_idx) * 60);
         target = running_avg_time[(rot_idx + 3) & 7];
         cout << "starting_idx = " << (int) starting_idx << "; starting_idx_time = " << starting_idx_time << endl;
     }
@@ -267,7 +311,7 @@ void Sim::wake_up_and_run() {
 
     bool new_state = false;
     uint32_t temp = xo_day_time_in_sec + projected_end_time_in_sec - xo_sys_time_in_sec;
-    cout << "temp = " << temp << endl;
+    // cout << "temp = " << temp << endl;
     if(day_state != NIGHT) {
         new_state = temp >= day_state_end_time;
     }
@@ -291,14 +335,16 @@ void Sim::wake_up_and_run() {
             uint32_t sample_time = starting_idx_time;
             if(day_state != DUSK) { // == DUSK or NOON
                 // because we're going from first to last, left shift 0s into proc_cache
-                cout << "max idx = " << (int) max_idx << endl;
-                write_to_proc_cache(0, proc_cache_remainder);
+                // cout << "max idx = " << (int) max_idx << endl;
+                right_shift_arr(proc_cache, 0, PROC_CACHE_LEN, 1 - proc_cache_remainder);
+                write_to_mem(proc_cache, cache_addr, PROC_CACHE_LEN);
+                // print_proc_cache();
                 proc_cache_remainder = 0;   // manually set to 0 to start reading
                 cache_addr = CACHE_START_ADDR;
 
                 if(day_state == NOON) {
                     starting_idx = 0;
-                    cout << "starting_idx_time = " << starting_idx_time << endl;
+                    // cout << "starting_idx_time = " << starting_idx_time << endl;
                     sample_time = starting_idx_time;
                 }
                 else if(starting_idx == 0xFF) {
@@ -311,7 +357,7 @@ void Sim::wake_up_and_run() {
                 sign = 1;
             }
             else {
-                cout << "proc_cache_remainder = " << proc_cache_remainder << endl;
+                // cout << "proc_cache_remainder = " << proc_cache_remainder << endl;
                 proc_cache_remainder = PROC_CACHE_MAX_REMAINDER - proc_cache_remainder;   // manually set to 0 to start reading
                 starting_idx = starting_idx == 0xFF? max_idx : starting_idx;
 
@@ -323,7 +369,7 @@ void Sim::wake_up_and_run() {
                     sample_time = starting_idx_time;
                 }
 
-                print_proc_cache();
+                // print_proc_cache();
                 // last to first
                 start = max_idx;
                 end = -1;
@@ -348,8 +394,7 @@ void Sim::wake_up_and_run() {
                     // store diff
                     uint16_t diff = log_light - last_log_light;
                     store_diff_to_code_cache(diff, sample_idx, cur_edge);
-                    cout << sample_time << " " << log_light << endl;
-                    sample_times_map[sample_time] = log_light / 32.0;
+                    sample_times_map[sample_time + sys_to_epoch_offset] = (pow(2, log_light / 32.0) - 1) / 1577.0;
 
                     sample_idx++;
                     last_log_light = log_light;
@@ -376,6 +421,7 @@ void Sim::wake_up_and_run() {
         day_state = (day_state + 1) & 0b11;
         max_idx = 0;
         starting_idx = 0xFF;
+        sum = 0xFFFF;   // reset sum as well
 
         projected_end_time_in_sec = xo_sys_time_in_sec + day_state_end_time - xo_day_time_in_sec;
         if(day_state == DAWN) {
@@ -409,68 +455,49 @@ void Sim::write_to_proc_cache(uint16_t data, int16_t len) {
     data &= (right_shift(1, -len) - 1);
 
     if(len >= proc_cache_remainder) {
-        // if no more cache space, store what can be stored
-        uint16_t temp = right_shift(data, len - proc_cache_remainder);
-        right_shift_arr(proc_cache, temp, PROC_CACHE_LEN, -proc_cache_remainder);
-        print_proc_cache();
+        // if no more cache space, store and switch to new cache
         write_to_mem(proc_cache, cache_addr, PROC_CACHE_LEN);
-        cout << "flushing proc cache to " << cache_addr << endl;
+        // print_proc_cache();
+        // cout << "flushing proc cache to " << cache_addr << endl;
         cache_addr += (PROC_CACHE_LEN << 2);
-        uint16_t mask = right_shift(1, len - proc_cache_remainder) - 1;
-        data &= mask;
-        len -= proc_cache_remainder;
         proc_cache_remainder = PROC_CACHE_MAX_REMAINDER;
     }
 
     right_shift_arr(proc_cache, data, PROC_CACHE_LEN, -len);
     proc_cache_remainder -= len;
+
+    // cout << "remainder = " << proc_cache_remainder << endl;
 }
 
 uint16_t Sim::read_next_from_proc_cache() {
     uint16_t res = 0;
 
     if(day_state == DUSK) {
-        // read leftover bits
-        // load new array from mem
-        // read more bits
-        uint16_t len = 11;
-        uint16_t mask = 0x7FF;
+        // start reading from bottom
         if(proc_cache_remainder < 11) {
-            cout << "remainder = " << proc_cache_remainder << endl;
-            res = proc_cache[PROC_CACHE_LEN - 1] & 0x7FF;
-            mask = right_shift(mask, 11 - proc_cache_remainder);
-            len -= proc_cache_remainder;
-
             // decrement address before reading because we start on an incorrect address
             cache_addr -= PROC_CACHE_LEN << 2;
             read_from_mem(proc_cache, cache_addr, PROC_CACHE_LEN);
-            cout << "Reading mem from " << cache_addr << endl;
+            // cout << "Reading mem from " << cache_addr << endl;
             proc_cache_remainder = PROC_CACHE_MAX_REMAINDER;
         }
-
-        res |= right_shift(proc_cache[PROC_CACHE_LEN - 1] & mask, 11 - len);
-        proc_cache_remainder -= len;
-
-        right_shift_arr(proc_cache, 0, PROC_CACHE_LEN, len);
+        res = proc_cache[PROC_CACHE_LEN - 1] & 0x7FF;
+        proc_cache_remainder -= 11;
+        right_shift_arr(proc_cache, 0, PROC_CACHE_LEN, 11);
     }
     else {
-        uint8_t len = 11;
         if(proc_cache_remainder < 11) {
-            res = right_shift(proc_cache[0], 32 - proc_cache_remainder);
-            res = right_shift(res, proc_cache_remainder - 11);
-            
-            len -= proc_cache_remainder;
-
             read_from_mem(proc_cache, cache_addr, PROC_CACHE_LEN);
-            cout << "Reading mem from " << cache_addr << endl;
+            // cout << "Reading mem from " << cache_addr << endl;
+            // increment address after we read from memory because we start on a correct addr
             cache_addr += PROC_CACHE_LEN << 2;
             proc_cache_remainder = PROC_CACHE_MAX_REMAINDER;
         }
 
-        res |= right_shift(proc_cache[0], 32 - len);
-        proc_cache_remainder -= len;
+        res |= right_shift(proc_cache[0], 20) & 0x7FF;
+        proc_cache_remainder -= 11;
 
-        right_shift_arr(proc_cache, 0, PROC_CACHE_LEN, -len);
+        right_shift_arr(proc_cache, 0, PROC_CACHE_LEN, -11);
     }
 
     return res;
@@ -524,13 +551,19 @@ void Sim::store_diff_to_code_cache(int16_t diff, uint8_t start_idx, uint32_t edg
 
         if(!has_header) {
             len_needed += UNIT_HEADER_SIZE;
-            if(code_cache_remainder < len_needed) {
-                flush_code_cache();
-            }
 
+        }
+
+        if(code_cache_remainder < len_needed) {
+            flush_code_cache();
+            has_header = false;
+        }
+
+        if(!has_header) {
             store_code(edge_time & 0x1FFFF, 17);
             store_code(day_state, 2);
             store_code(start_idx, 8);
+            has_header = true;
         }
 
         store_code(code, code_lengths[code_idx]);
@@ -541,6 +574,7 @@ void Sim::store_diff_to_code_cache(int16_t diff, uint8_t start_idx, uint32_t edg
         else if(code_idx == 65) {
             store_code(diff, 11);
         }
+        // cout << "code_cache_remainder = " << code_cache_remainder << endl; 
     }
 
 }
@@ -558,7 +592,7 @@ void Sim::store_day_state_stop() {
     }
 }
 
-void Sim::store_code(int32_t code, uint8_t len) {
+void Sim::store_code(int32_t code, int8_t len) {
     assert(code_cache_remainder >= len);
     right_shift_arr(code_cache, code, CODE_CACHE_LEN, -len);
     code_cache_remainder -= len;
@@ -667,6 +701,27 @@ map<time_t, double> Sim::read_file(const string& filename) {
 
     }
 
+    // get raw sample times
+    regex f("(.+)\/(.+)\.csv");
+    smatch m0;
+    regex_search(filename, m0, f);
+
+    string ppath = getenv("PROJECT_DIR");
+    ppath += "/data/src/compression_sim/";
+    string sample_times_filename = ppath + "sample_data/" + m0.str(2) + "_HOBO.csv";
+
+    ofstream sample_times_fout(sample_times_filename);
+    if(!sample_times_fout.is_open()) {
+        cout << "Error opening file: " << sample_times_filename << endl;
+        assert(0);
+    }
+
+    for(auto p : res) {
+        sample_times_fout << p.first << "," << p.second << endl;
+    }
+
+    raw_filename = m0.str(2);
+
     return res;
 
 };
@@ -706,6 +761,7 @@ double Sim::get_raw_data(const std::map<std::time_t, double>& data_map, time_t q
         time_t d1 = q - start->first, d2 = end->first - q;
 
         lux = (p.first->second * d2) / (d1 + d2) + (p.second->second * d1) / (d1 + d2);
+        cout << q << " " << p.first->second << " " << p.second->second << endl;
     }
 
     return lux;
@@ -752,3 +808,24 @@ uint32_t Sim::day_time_2_sec(const string& str) {
     return hr * 3600 + min * 60 + sec;
 }
 
+void Sim::configure_sim(double lat_in, double lon_in) {
+    lat = lat_in;
+    lon = lon_in;
+
+    string loc_path = getenv("LOC_DIR");
+    loc_path += "/";
+
+    ofstream loc_fout1(loc_path + "loc/" + raw_filename + "_sample_times_loc.csv");
+    if(!loc_fout1.is_open()) {
+        cout << "Error opening loc_fout1" << endl;
+        assert(0);
+    }
+    loc_fout1 << lat_in << " " << lon_in << endl;
+
+    ofstream loc_fout2(loc_path + "loc/" + raw_filename + "_HOBO_loc.csv");
+    if(!loc_fout2.is_open()) {
+        cout << "Error opening loc_fout2" << endl;
+        assert(0);
+    }
+    loc_fout2 << lat_in << " " << lon_in << endl;
+}

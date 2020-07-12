@@ -18,7 +18,7 @@ do
     ((cnt++))
     echo "$cnt $f"
     #$PROJECT_DIR/build/src/compression_sim/run_sim.exe ~/Dropbox/UMICH/EE\ Research/data/csv_files_4/SN_20418688_2018-10-26_15_01_38_-0400.csv
-    $PROJECT_DIR/build/src/compression_sim/run_sim.exe "$f"
+    $PROJECT_DIR/build/src/compression_sim/run_sim.exe "$f" > /dev/null
 done
 
 $PROJECT_DIR/build/src/compression_sim/huffman_tree_gen.exe

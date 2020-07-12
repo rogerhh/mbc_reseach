@@ -17,6 +17,7 @@
 #define EDGE_MARGIN2 3570 // y * 60 + 30 = 3570
 
 #define EDGE_THRESHOLD 200 // = log2(2 lux * 1577) * 32
+#define STARTING_IDX_SHIFT 8 // = 4 + 4
 
 #define XO_1_MIN 60
 #define XO_8_MIN 480
@@ -55,12 +56,11 @@ public:
     uint32_t starting_idx_time = 0;
 
 #define STARTING_IDX_INIT 0xFF
-#define STARTING_IDX_SHIFT 8 // = 4 + 4
 
     uint8_t max_idx = 0;
     int16_t starting_idx = 0xFF;
     uint8_t intervals[4] = {1, 2, 8, 32};
-    uint16_t resample_indices[4] = {36, 42, 44, 1000};
+    uint16_t resample_indices[4] = {50, 60, 70, 1000};
 
     // 64 = 9 bit, 65 = 11 bit, 66 = stop
     uint16_t diff_codes[67];

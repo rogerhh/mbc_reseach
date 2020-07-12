@@ -28,7 +28,7 @@ light_net.eval()
 ############################
 
 NAME = sys.argv[1]
-data = sio.loadmat('/home/rogerhh/butterfly_localization/tmp/' + NAME + '.mat')
+data = sio.loadmat('~/butterfly_localization/tmp/' + NAME + '.mat')
 
 light_test = data['test_light']
 #temp_test = data['test_temp']

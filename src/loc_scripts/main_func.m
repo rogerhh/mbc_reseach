@@ -1,6 +1,6 @@
 function out = main_func(dir_path, file_path)
 
-ppath = '/home/rogerhh/butterfly_localization/';
+ppath = '~/butterfly_localization/';
 
 %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
 addpath(genpath([ppath, './utils']));

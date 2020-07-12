@@ -2,11 +2,15 @@
 
 # read all csv files
 #ls /home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_*/*.csv | head -n 3
-files=$(ls /home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_*/*.csv | head -n 200)
+files=$(ls /home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_*/*.csv | head -n 100)
 # files=$(ls /home/rogerhh/Dropbox/UMICH/EE\ Research/data/csv_files_10/SN_20680267*.csv | head -n 200)
 
 BASH_DIR="$(cd $(dirname ${BASH_SOURCE[0]}) && pwd)"
+export LOC_DIR="/home/rogerhh/butterfly_localization"
 export PROJECT_DIR="$(dirname $BASH_DIR)"
+
+cd $PROJECT_DIR/build
+make
 
 OIFS="$IFS"
 

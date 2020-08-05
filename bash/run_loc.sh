@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # read all csv files
-files=$(ls /home/rogerhh/mbc_research/data/src/compression_sim/sample_data/*_sample_times.csv | tail -n 10)
+files=$(ls /home/rogerhh/mbc_research/data/src/compression_sim/sample_data/*0_sample_times.csv | tail -n 10)
 
 BASH_DIR="$(cd $(dirname ${BASH_SOURCE[0]}) && pwd)"
 LOC_DIR="/home/rogerhh/butterfly_localization"

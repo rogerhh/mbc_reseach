@@ -28,10 +28,10 @@ int main(int argc, char** argv) {
     csv_list_fin.close();
 
     string filename = string(argv[1]);
-    if(names.find(filename) != names.end()) {
-        // filename already processed
-        return 0;
-    }
+    // if(names.find(filename) != names.end()) {
+    //     // filename already processed
+    //     return 0;
+    // }
 
     // cout << filename << endl;
     Sim sim(filename, true);

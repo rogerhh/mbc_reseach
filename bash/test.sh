@@ -1,5 +1,6 @@
 #!/bin/bash
 
-sqlite3 ~/mbc_research/data/mbc_database.db
+DATA_DIR=~/"Dropbox/UMICH/EE Research/"
+echo "$DATA_DIR"
 
-select * from SENSOR_DATA;
+ls "$DATA_DIR"

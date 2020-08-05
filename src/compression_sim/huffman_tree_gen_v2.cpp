@@ -103,7 +103,6 @@ int main(int argc, char** argv) {
         fout << p.first << " " << p.second << endl;
     }
 
-
     // calculate average
     double exp_sum = 0;
     for(auto p : freq_map) {
@@ -119,4 +118,27 @@ int main(int argc, char** argv) {
     }
 
     cout << "Expected length per data point = " << exp_sum << endl;
+
+    ofstream header_fout(ppath + "/data/src/compression_sim/huffman_encodings.h");
+    header_fout << "#ifndef HUFFMAN_ENCODINGS_H\n#define HUFFMAN_ENCODINGS_H\n\nuint16_t diff_codes[67]={";
+
+    int i = 0;
+    for(auto p : m) {
+        header_fout << p.second.code;
+        if(i != 66) {
+            header_fout << ",";
+        }
+        i++;
+    }
+    header_fout << "};\nuint8_t code_lengths[67]={";
+    i = 0;
+    for(auto p : m) {
+        header_fout << p.second.len;
+        if(i != 66) {
+            header_fout << ",";
+        }
+        i++;
+    }
+    header_fout << "};\n\n#endif";
+
 }

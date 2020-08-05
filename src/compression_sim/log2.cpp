@@ -6,10 +6,10 @@
 #include <fstream>
 #include <cassert>
 
-#define FLOAT_LEN 16
-
 using namespace std;
 
+// LOG_CONST_ARR[i] = log2(2^(-i - 1))
+// The 15 LSBs are below the decimal point
 const uint16_t LOG_CONST_ARR[5] = {0b1011010100000100,
                                    0b1001100000110111,
                                    0b1000101110010101,
@@ -21,16 +21,6 @@ typedef uint32_t* uint128_t;
 static void long_int_assign(uint128_t dest, uint128_t src) {
     for(int i = 0; i < 4; i++) {
         dest[i] = src[i];
-    }
-}
-
-static void long_int_add(uint128_t lhs, uint128_t rhs, uint128_t res) {
-    uint32_t carry_in = 0;
-    uint32_t temp_res[4] = {0, 0, 0, 0};
-    for(int i = 0; i < 4; i++) {
-        uint64_t temp = carry_in + lhs[i] + rhs[i]; 
-        carry_in = temp >> 32;
-        temp_res[i] = temp & 0xFFFFFFFF;
     }
 }
 
@@ -48,12 +38,11 @@ static void long_int_mult(uint128_t lhs, uint16_t rhs, uint128_t res) {
 
 static bool long_int_lte(uint128_t lhs, uint128_t rhs) {
     for(int i = 0; i < 4; i++) {
-        if(lhs[3 - i] < rhs[3 - i])
-            return true;
-        else if(lhs[3 - i] > rhs[3 - i])
-            return false;
+        if(lhs[3 - i] != rhs[3 - i]) {
+            return lhs[3 - i] < rhs[3 - i];
+        }
     }
-    return false;
+    return true;
 }
 
 static ostream& operator<<(ostream& os, uint128_t in) {
@@ -63,6 +52,8 @@ static ostream& operator<<(ostream& os, uint128_t in) {
     return os;
 }
 
+// Takes in a 64-bit input and returns a fixed-point log2(input)
+// The 5 LSBs are below the decimal point
 uint16_t func_log2(uint64_t input) {
 
     if(input == 0) { return 0xFFFF; }
@@ -72,6 +63,8 @@ uint16_t func_log2(uint64_t input) {
     input_storage[1] = input >> 32;
     uint16_t out = 0;
 
+    // Find the position of the first 1 in the input, this will be the 
+    // value of the output above the decimal point
     for(int16_t i = 63; i >= 0; i--) {
         if(input & ((uint64_t) 1 << i)) {
             temp_result[0] = (1 << i) & 0xFFFFFFFF;
@@ -82,6 +75,9 @@ uint16_t func_log2(uint64_t input) {
     }
 
     for(int i = 0; i < 5; i++) {
+        // Multiply the temp product by log(2^(-i - 1)) and compare it with the input
+        // If temp product <= input, then put a 1 in the ith position below 
+        // the decimal pointl otherwise put a 0
         uint32_t new_result[4];
         long_int_mult(temp_result, LOG_CONST_ARR[i], new_result);
         long_int_mult(input_storage, (1 << 15), input_storage);
@@ -98,7 +94,8 @@ uint16_t func_log2(uint64_t input) {
     return out;
 }
 
-static int log2_main() {
+// For debug
+int log2_main() {
     ofstream fout("log2.csv");
     double lower = 1, upper = 2;
     cout << func_log2(pow(2, 32) - 1) << " " << pow(2, 32) << endl; 

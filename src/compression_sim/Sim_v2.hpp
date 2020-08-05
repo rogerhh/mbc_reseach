@@ -17,10 +17,11 @@
 #define EDGE_MARGIN2 3570 // y * 60 + 30 = 3570
 
 #define EDGE_THRESHOLD 200 // = log2(2 lux * 1577) * 32
-#define STARTING_IDX_SHIFT 8 // = 4 + 4
+#define THRESHOLD_IDX_SHIFT 8 // = 4 + 4
 
 #define XO_1_MIN 60
 #define XO_8_MIN 480
+#define XO_10_MIN 600
 #define XO_32_MIN 1920
 
 class Sim {
@@ -47,31 +48,36 @@ public:
     uint8_t day_count = 0;
     uint8_t rot_idx = 0;
     uint16_t running_avg[8] = {0, 0, 0, 0, 0, 0, 0, 0};
-    uint16_t sum = 0xFFFF;
     uint32_t running_avg_time[8] = {0, 0, 0, 0, 0, 0, 0, 0};
+    uint16_t sum = 0xFFFF;
+    uint16_t avg_light = 0;
 
     uint32_t cur_sunrise = 0, cur_sunset = 0, next_sunrise = 0, next_sunset = 0, cur_edge = 0;
     uint32_t xo_sys_time_in_sec = 0, xo_day_time_in_sec = 0;
     uint32_t sys_to_epoch_offset = 0, projected_end_time_in_sec = 0;
-    uint32_t starting_idx_time = 0;
+    uint32_t threshold_idx_time = 0;
+    uint32_t min_light_time = 0;
+    uint32_t day_state_start_time, day_state_end_time;
 
-#define STARTING_IDX_INIT 0xFF
+#define IDX_INIT 0xFF
 
     uint8_t max_idx = 0;
-    int16_t starting_idx = 0xFF;
     uint8_t intervals[4] = {1, 2, 8, 32};
-    uint16_t resample_indices[4] = {50, 60, 70, 1000};
+    uint16_t resample_indices[4] = {32, 40, 44, 1000};
+    uint16_t min_light = 0xFFFF;
+    uint16_t min_light_idx = IDX_INIT;
+    uint16_t threshold_idx = IDX_INIT;
 
     // 64 = 9 bit, 65 = 11 bit, 66 = stop
     uint16_t diff_codes[67];
     uint8_t code_lengths[67];
 
-#define CODE_CACHE_LEN 10
-#define CODE_CACHE_MAX_REMAINDER 296 // 320 - 26 = 296
-    uint32_t code_cache[10];
+#define CODE_CACHE_LEN 9
+#define CODE_CACHE_MAX_REMAINDER 272 // 320 - 12 * 4 = 272
+    uint32_t code_cache[CODE_CACHE_LEN];
     uint16_t code_cache_remainder = CODE_CACHE_MAX_REMAINDER;
 
-#define UNIT_HEADER_SIZE 28 // 7 bit edge time stamp, 2 bit day state, 8 bit starting idx
+#define UNIT_HEADER_SIZE 27 // 17 bit edge time stamp, 2 bit day state, 8 bit starting idx
     bool has_header = false;
 
 #define DAWN 0
@@ -96,6 +102,9 @@ public:
                    uint32_t cur_sunrise_in, uint32_t cur_sunset_in,
                    uint32_t epoch_time,
                    const std::string& sample_times_file);
+
+    uint32_t get_day_state_end_time();
+    uint32_t get_day_state_start_time();
 
     void configure_sim(double lat_in, double lon_in);
 

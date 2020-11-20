@@ -11,4 +11,7 @@
 #~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_8.txt
 #~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_9.txt
 #~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_10.txt
-~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_11.txt
+#~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_11.txt
+#~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_12.txt
+#~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_13.txt
+~/mbc_research/build/src/read_data_into_database.exe ~/Dropbox/UMICH/EE\ Research/data/info_table_14.txt

@@ -5,7 +5,9 @@ LOC_DIR=~/butterfly_localization
 export PROJECT_DIR="$(dirname $BASH_DIR)"
 
 # read all csv files
-files=$(ls $PROJECT_DIR/data/src/compression_sim/sample_data/*light_sample_times.csv | tail -n 10)
+loc_files_start=0
+loc_files_end=5
+files=$(ls $PROJECT_DIR/data/src/compression_sim/sample_data/*light_sample_times.csv | tail -n +$loc_files_start | head -n $(($loc_files_end - $loc_files_start)))
 
 cnt=0
 for sample_f in $files
@@ -23,6 +25,7 @@ do
 
     if [[ $(ls "$LOC_DIR/Testdata" | grep "$fname") ]]
     then
+        echo "Copying files over"
         cp $LOC_DIR/Testdata/$fname* $LOC_DIR/tmp/
     else
         if [[ $(ls "$LOC_DIR/loc" | grep "$fname") ]]
@@ -43,7 +46,7 @@ do
         fi
     fi
 
-    mat_files="$(ls $LOC_DIR/tmp/*light_sample_times*.mat | tail -n 1)"
+    mat_files="$(ls $LOC_DIR/tmp/*light_sample_times*.mat)"
 
     for mat_f in $mat_files
     do
@@ -61,7 +64,7 @@ do
             python3 test.py "$fname_hobo"
 
             cd "$LOC_DIR"
-            cmd="-nodisplay -nodesktop -r \"try, show_result_func_v3('$fname_resampled'), show_result_func_v3('$fname_hobo'), summarize_v3('$LOC_DIR/tmp/"$fname_hobo"_results.mat', '$LOC_DIR/tmp/"$fname_resampled"_results.mat'), catch, exit, end, exit\""
+            cmd="-nodisplay -nodesktop -r \"show_result_func_v3('$fname_resampled'), show_result_func_v3('$fname_hobo'), summarize_v3('$LOC_DIR/tmp/"$fname_hobo"_results.mat', '$LOC_DIR/tmp/"$fname_resampled"_results.mat'), exit\""
             /usr/local/MATLAB/R2018b/bin/matlab "$cmd > /dev/null"
         fi
 

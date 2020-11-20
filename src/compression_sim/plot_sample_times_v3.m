@@ -1,6 +1,6 @@
-arr = dir('~/mbc_research/data/src/compression_sim/sample_data/*light_sample_times*')
-filename = arr(1).name;
-v1 = importdata(['~/mbc_research/data/src/compression_sim/sample_data/', filename]);
+filename = 'SN_20418697_2018-10-29_17_39_10_-0400';
+v1 = importdata(['~/mbc_research/data/src/compression_sim/sample_data/', filename, '_light_sample_times.csv']);
+v2 = importdata(['~/mbc_research/data/src/compression_sim/sample_data/', filename, '_light_HOBO.csv']);
 
 f = figure
 hold off
@@ -16,3 +16,5 @@ for i=1:size(v1, 1)
     end
     hold on
 end
+
+plot(v2(:, 1), log10(v2(:, 2)), 'b')

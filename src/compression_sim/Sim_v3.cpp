@@ -534,6 +534,7 @@ void Sim::set_new_state() {
 
     // set new light measure time
     next_light_meas_time = day_state_start_time + xo_sys_time_in_sec - xo_day_time_in_sec;
+    light_meas_start_time_in_min = next_light_meas_time / 60;
 
 }
 
@@ -627,6 +628,214 @@ uint16_t Sim::read_next_from_proc_cache() {
 }
 
 void Sim::sample_light() {
+    // get light data
+    uint64_t lnt_sys_light = get_light_data(xo_sys_time_in_sec + sys_to_epoch_offset);
+
+    // store to cache
+    uint16_t log_light = func_log2(lnt_sys_light);
+    uint16_t last_avg_light = avg_light;
+    write_to_proc_cache(log_light);
+
+    // store to running sum
+    if(sum == 0xFFFF) {
+        // if uninitialized, initialize running avg
+        for(int i = 0; i < 8; i++) {
+            running_avg[i] = log_light;
+            running_avg_time[i] = xo_day_time_in_sec;
+        }
+        sum = log_light << 3;
+    }
+    else {
+        sum -= running_avg[rot_idx];
+        sum += log_light;
+
+        running_avg[rot_idx] = log_light;
+        running_avg_time[rot_idx] = xo_day_time_in_sec;
+        rot_idx = (rot_idx + 1) & 7;
+    }
+
+    avg_light = sum >> 3;
+
+    // record min_light_in_day_state
+    if(min_light_idx == IDX_INIT || avg_light < min_light
+            || (day_state == DAWN && avg_light == min_light)) { // find last min_light at dawn
+        min_light = avg_light;
+        min_light_idx = max_idx;
+    }
+
+    uint32_t target = 0;
+
+    // test if crosses threshold
+    if(day_state == DAWN && threshold_idx == IDX_INIT
+            && avg_light >= EDGE_THRESHOLD && last_avg_light < EDGE_THRESHOLD) {
+        threshold_idx = max_idx;
+        target = running_avg_time[(rot_idx + 3) & 7];
+    }
+    else if(day_state == DUSK && threshold_idx == IDX_INIT
+            && avg_light <= EDGE_THRESHOLD && last_avg_light > EDGE_THRESHOLD) {
+        threshold_idx = max_idx;
+        target = running_avg_time[(rot_idx + 3) & 7];
+    }
+
+    // set new edge time
+    if(target) {
+        if(target > cur_edge + MAX_EDGE_SHIFT) {
+            target = cur_edge + MAX_EDGE_SHIFT;
+        }
+        else if(target < cur_edge - MAX_EDGE_SHIFT) {
+            target = cur_edge - MAX_EDGE_SHIFT;
+        }
+
+        // check edge invariants before setting new edge
+        if(day_state == DAWN && target > 0 && target < MID_DAY_TIME 
+                && (cur_sunset - target > XO_270_MIN)) {
+            next_sunrise = target;
+        }
+        else if(day_state == DUSK && target > MID_DAY_TIME && target < MAX_DAY_TIME 
+                && (target - cur_sunrise > XO_270_MIN)) {
+            next_sunset = target;
+        }
+    }
+
+    // save this wakeup time in case it's the last
+    uint32_t light_meas_end_time_in_min = next_light_meas_time / 60;
+
+    // set next light measure time
+    if(day_state == DAWN || day_state == DUSK) {
+        next_light_meas_time += XO_1_MIN;
+    }
+    else {
+        next_light_meas_time += XO_32_MIN;
+    }
+
+    bool new_state = false;
+    uint32_t temp = xo_day_time_in_sec + next_light_meas_time - xo_sys_time_in_sec;
+    if(day_state != NIGHT) {
+        new_state = (temp >= day_state_end_time);
+    }
+    else {
+        new_state = (temp >= day_state_end_time && temp < MID_DAY_TIME);
+    }
+
+    if(new_state) {
+        if(day_state != NIGHT) {
+            // resample and store
+            uint16_t starting_idx = 0;
+            int16_t start, end, sign;
+            uint32_t sample_time_in_min = 0;
+
+            if(day_state == DUSK) {
+                // from last to first
+                // manual set remainder to current data in proc_cache to start reading
+                proc_cache_remainder = PROC_CACHE_MAX_REMAINDER - proc_cache_remainder;
+                // if crossed threshold
+                if(threshold_idx != IDX_INIT) {
+                    if(threshold_idx + THRESHOLD_IDX_SHIFT > max_idx) {
+                        starting_idx = max_idx;
+                    }
+                    else {
+                        starting_idx = threshold_idx + THRESHOLD_IDX_SHIFT;
+                    }
+                }
+                else {
+                    starting_idx = min_light_idx;
+                }
+
+                sample_time_in_min = light_meas_end_time_in_min;
+
+                // last to first
+                start = max_idx;
+                end = -1;
+                sign = -1;
+            }
+            else {
+                // going from first to last, left shift 0s into proc_cache
+                right_shift_arr(proc_cache, 0, PROC_CACHE_LEN, 1 - proc_cache_remainder);
+                write_to_mem(proc_cache, cache_addr, PROC_CACHE_LEN - 1);
+
+                proc_cache_remainder = 0; // manually set to 0 to start reading
+                cache_addr = CACHE_START_ADDR;
+
+                if(day_state == NOON) {
+                    starting_idx = 0;
+                }
+                else if(threshold_idx != IDX_INIT) {
+                    if(threshold_idx < THRESHOLD_IDX_SHIFT) {
+                        starting_idx = 0;
+                    }
+                    else {
+                        starting_idx = threshold_idx - THRESHOLD_IDX_SHIFT;
+                    }
+
+                }
+                else {
+                    starting_idx = min_light_idx;
+                }
+
+                sample_time_in_min = light_meas_start_time_in_min;
+
+                // first to last
+                start = 0;
+                end = max_idx + 1;
+                sign = 1;
+            }
+
+            int16_t i;
+            uint16_t last_log_light = 0;
+            uint8_t next_sample_idx = starting_idx;
+            uint8_t sample_idx = 0;
+            uint8_t interval_idx = 0;
+            for(i = start; i != end; i += sign) {
+                uint16_t log_light = read_next_from_proc_cache();
+                cout << log_light << " ";
+                if(i == next_sample_idx) {
+                    cout << "sampled ";
+
+                    light_sample_times_map[sample_time_in_min * 60 + sys_to_epoch_offset] = (pow(2, log_light / 32.0) - 1) / 1577.0;
+
+                    // store diff
+                    uint16_t diff = log_light - last_log_light;
+                    store_diff_to_code_cache(diff, sample_idx, sample_time_in_min);
+
+                    sample_idx++;
+                    last_log_light = log_light;
+                    if(day_state == NOON) {
+                        next_sample_idx++;
+                    }
+                    else {
+                        if(sample_idx >= resample_indices[interval_idx]) {
+                            interval_idx++;
+                        }
+
+                        next_sample_idx += (intervals[interval_idx] * sign);
+                    }
+                }
+                if(day_state == NOON) {
+                    sample_time_in_min += 32;
+                }
+                else if(day_state == DAWN) {
+                    sample_time_in_min += 1;
+                }
+                else if(day_state == DUSK) {
+                    sample_time_in_min -= 1;
+                }
+            }
+            store_day_state_stop();
+        }
+    
+        // reset new state variables
+        day_state = (day_state + 1) & 0b11;
+        set_new_state();
+    }
+    else {
+        max_idx++;
+    }
+
+
+}
+
+/*
+void Sim::sample_light_old() {
     // get light data
     uint64_t lnt_sys_light = get_light_data(xo_sys_time_in_sec + sys_to_epoch_offset);
 
@@ -814,6 +1023,7 @@ void Sim::sample_light() {
                     }
                 }
             }
+            store_day_state_stop();
         }
     
         // reset new state variables
@@ -832,8 +1042,10 @@ void Sim::sample_light() {
 
     cout << endl;
 }
+*/
 
-void Sim::store_diff_to_code_cache(int16_t diff, uint8_t start_idx, uint32_t edge_time) {
+void Sim::store_diff_to_code_cache(int16_t diff, uint8_t start_idx, uint32_t edge_time_in_min
+        ) {
     if(train) {
         uint8_t len_needed = 6;
         if(!has_header) {
@@ -842,7 +1054,7 @@ void Sim::store_diff_to_code_cache(int16_t diff, uint8_t start_idx, uint32_t edg
                 flush_code_cache();
             }
 
-            store_code(edge_time & 0x1FFFF, 17);
+            store_code(edge_time_in_min & 0x1FFFF, 17);
             store_code(day_state, 2);
             store_code(start_idx, 7);
         }
@@ -891,7 +1103,7 @@ void Sim::store_diff_to_code_cache(int16_t diff, uint8_t start_idx, uint32_t edg
         }
 
         if(!has_header) {
-            store_code(edge_time & 0x1FFFF, 17);
+            store_code(edge_time_in_min & 0x1FFFF, 17);
             store_code(day_state, 2);
             store_code(start_idx, 7);
             has_header = true;

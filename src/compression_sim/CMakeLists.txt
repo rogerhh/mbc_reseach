@@ -7,4 +7,7 @@ add_executable(huffman_tree_gen_v3.exe huffman_tree_gen_v3.cpp)
 add_executable(run_compression_sim.exe run_compression_sim.cpp log2.cpp Sim.cpp ../json11.cpp)
 add_executable(run_compression_sim_v2.exe run_compression_sim_v2.cpp log2.cpp Sim_v2.cpp ../json11.cpp)
 add_executable(run_compression_sim_v3.exe run_compression_sim_v3.cpp log2.cpp Sim_v3.cpp ../json11.cpp)
+add_executable(resample_test.exe resample_test.cpp)
 
+add_executable(decoder_v5_2_1.exe decoder_v5_2_1.cpp)
+add_executable(decoder_v5_2_2.exe decoder_v5_2_2.cpp)

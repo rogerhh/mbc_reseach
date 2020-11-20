@@ -88,13 +88,13 @@ public:
     uint32_t next_light_meas_time = 0;
     uint32_t store_temp_timestamp = 0;
     uint8_t store_temp_index = 0;
-    uint32_t threshold_idx_time = 0;
-    uint32_t min_light_time = 0;
+    uint32_t light_meas_start_time_in_min = 0;
     uint32_t day_state_start_time, day_state_end_time;
 
     uint8_t max_idx = 0;
     const uint8_t intervals[4] = {1, 2, 8, 32};
-    const uint16_t resample_indices[4] = {32, 40, 44, 1000};
+
+    const uint16_t resample_indices[4] = {64, 72, 76, 1000};
     uint16_t min_light = 0xFFFF;
     uint16_t min_light_idx = IDX_INIT;
     uint16_t threshold_idx = IDX_INIT;

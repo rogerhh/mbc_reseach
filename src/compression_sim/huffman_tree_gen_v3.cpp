@@ -80,6 +80,8 @@ map<int, Code> process_light() {
         freq_map[code] = count;
     }
 
+    cout << "here1" << endl;
+
     while(pq.size() > 1) {
         Node* node1 = pq.top();
         pq.pop();
@@ -89,6 +91,7 @@ map<int, Code> process_light() {
         Node* new_node = new Node(node1, node2);
         pq.push(new_node);
     }
+    cout << "here2" << endl;
 
     map<int, Code> m;
     get_code(m, pq.top());
@@ -103,6 +106,7 @@ map<int, Code> process_light() {
         fout << p.first << " " << p.second << endl;
     }
 
+    cout << "here3" << endl;
     // calculate average
     double exp_sum = 0;
     for(auto p : freq_map) {
@@ -186,7 +190,7 @@ int main(int argc, char** argv) {
 
     string ppath = getenv("PROJECT_DIR");
     ofstream header_fout(ppath + "/data/src/compression_sim/huffman_encodings_v3.h");
-    header_fout << "#ifndef HUFFMAN_ENCODINGS_H\n#define HUFFMAN_ENCODINGS_H\n\nuint16_t light_diff_codes[67]={";
+    header_fout << "#ifndef HUFFMAN_ENCODINGS_H\n#define HUFFMAN_ENCODINGS_H\n\n#include <stdint.h>\n\nconst uint16_t light_diff_codes[67]={";
 
     int i = 0;
     for(auto p : m) {
@@ -196,7 +200,7 @@ int main(int argc, char** argv) {
         }
         i++;
     }
-    header_fout << "};\nuint8_t light_code_lengths[67]={";
+    header_fout << "};\nconst uint16_t light_code_lengths[67]={";
     i = 0;
     for(auto p : m) {
         header_fout << p.second.len;
@@ -208,7 +212,7 @@ int main(int argc, char** argv) {
     
     m = process_temp();
 
-    header_fout << "};\n\nuint16_t temp_diff_codes[5]={";
+    header_fout << "};\n\nconst uint16_t temp_diff_codes[5]={";
 
     i = 0;
     for(auto p : m) {
@@ -218,7 +222,7 @@ int main(int argc, char** argv) {
         }
         i++;
     }
-    header_fout << "};\nuint8_t temp_code_lengths[5]={";
+    header_fout << "};\nconst uint16_t temp_code_lengths[5]={";
     i = 0;
     for(auto p : m) {
         header_fout << p.second.len;

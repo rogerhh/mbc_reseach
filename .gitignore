@@ -6,6 +6,7 @@ data/src/compression_sim/
 .exe
 .db
 .tar
+.gch
 
 !data/*.txt
 !data/*.csv

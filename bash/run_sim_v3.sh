@@ -2,7 +2,10 @@
 
 # read all csv files
 DATA_DIR=~/"Dropbox/UMICH/EE Research/data"
-files="$(ls "$DATA_DIR"/csv_files_*/*.csv | head -n 100)"
+
+train_range_start=0
+train_range_end=200
+files="$(ls "$DATA_DIR"/csv_files_*/*.csv | tail -n +$train_range_start | head -n $(($train_range_end - $train_range_start)))"
 
 BASH_DIR="$(cd $(dirname ${BASH_SOURCE[0]}) && pwd)"
 export LOC_DIR=~/butterfly_localization
@@ -25,7 +28,9 @@ done
 
 $PROJECT_DIR/build/src/compression_sim/huffman_tree_gen_v3.exe
  
-sim_files=$(ls "$DATA_DIR"/csv_files_*/*.csv | tail -n 10)
+sim_range_start=250
+sim_range_end=260
+sim_files=$(ls "$DATA_DIR"/csv_files_*/*.csv | tail -n +$sim_range_start | head -n $(($sim_range_end - $sim_range_start)))
 
 for f in $sim_files
 do

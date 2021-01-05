@@ -9,9 +9,9 @@
 
 using namespace std;
 
-#define EDGE_THRESHOLD 1
-#define THRESHOLD_IDX_SHIFT 12
-const int resample_indices[4] = {20, 28, 32, 1000};
+#define EDGE_THRESHOLD 5
+#define THRESHOLD_IDX_SHIFT 4
+const int resample_indices[4] = {32, 40, 44, 1000};
 const int interval_indices[4] = {1, 2, 8, 32};
 
 map<time_t, double> light_measurement_map;
@@ -131,6 +131,48 @@ int main(int argc, char** argv) {
         is_dusk = !is_dusk;
         day_state_start_time += 43200;
     }
+
+    // interpolate near 0 points to 0
+    for(auto it = light_sample_map.begin(); it != light_sample_map.end(); it++) {
+        // first sunrise point
+        if(it != light_sample_map.begin()) {
+            auto it2 = it;
+            it2--;
+            // if apart from prev point too much and not equal to 0
+            if(it->first - it2->first > 10000 && it->second != 0) {
+                // find the next value that is greater
+                auto it3 = it;
+                while(1) {
+                    it3++;
+                    if(it3->second > it->second) {
+                        break;
+                    }
+                }
+                double diff = (it3->first - it->first) * it->second / (it3->second - it->second);
+                light_sample_map[it->first - diff] = 0;
+            }
+        }
+
+        // last sunset point
+        auto it2 = it;
+        it2++;
+        if(it2 != light_sample_map.end()) {
+            // if apart from next point too much and not equal to 0
+            if(it2->first - it->first > 10000 && it->second != 0) {
+                // find the prev value that is greater
+                auto it3 = it;
+                while(1) {
+                    it3--;
+                    if(it3->second > it->second) {
+                        break;
+                    }
+                }
+                double diff = (it->first - it3->first) * it->second / (it3->second - it->second);
+                light_sample_map[it->first + diff] = 0;
+            }
+        }
+    }
+
 
     for(auto p : light_sample_map) {
         light_resampled_fout << p.first << " " << p.second << endl;
